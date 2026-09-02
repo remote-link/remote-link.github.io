@@ -12,6 +12,47 @@ const connectingText = document.getElementById('connectingText');
 const connectSubmitBtn = supportForm.querySelector('button[type="submit"]');
 
 let deferredPrompt = null;
+
+const INSTALL_NUDGE_VISIBLE_MS = 8000;
+const INSTALL_SWIPE_DISMISS_PX = 48;
+let installHideTimer = null;
+let installDragStartX = null;
+let installDragDeltaX = 0;
+
+function hideInstallNudge({ swiped = false } = {}) {
+  if (installHideTimer) {
+    clearTimeout(installHideTimer);
+    installHideTimer = null;
+  }
+
+  if (installBtn.hidden) return;
+
+  installBtn.classList.add(swiped ? 'install-nudge-swiped' : 'install-nudge-hiding');
+  window.setTimeout(() => {
+    installBtn.hidden = true;
+    installBtn.classList.remove('install-nudge-visible', 'install-nudge-hiding', 'install-nudge-swiped');
+    installBtn.style.transform = '';
+    installBtn.style.opacity = '';
+  }, 220);
+}
+
+function showInstallNudge() {
+  if (!deferredPrompt) return;
+
+  installBtn.hidden = false;
+  installBtn.classList.remove('install-nudge-hiding', 'install-nudge-swiped');
+  requestAnimationFrame(() => installBtn.classList.add('install-nudge-visible'));
+
+  if (installHideTimer) clearTimeout(installHideTimer);
+  installHideTimer = window.setTimeout(() => hideInstallNudge(), INSTALL_NUDGE_VISIBLE_MS);
+}
+
+function resetInstallDrag() {
+  installDragStartX = null;
+  installDragDeltaX = 0;
+  installBtn.style.transform = '';
+  installBtn.style.opacity = '';
+}
 let connectionAttempt = 0;
 
 function showView(id) {
@@ -231,22 +272,59 @@ document.getElementById('simulatePairBtn').addEventListener('click', () => {
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  installBtn.hidden = false;
+  showInstallNudge();
 });
 
+installBtn.addEventListener('pointerdown', (e) => {
+  installDragStartX = e.clientX;
+  installDragDeltaX = 0;
+  installBtn.setPointerCapture?.(e.pointerId);
+});
+
+installBtn.addEventListener('pointermove', (e) => {
+  if (installDragStartX === null) return;
+
+  installDragDeltaX = e.clientX - installDragStartX;
+  const limited = Math.max(-120, Math.min(120, installDragDeltaX));
+  installBtn.style.transform = `translateX(${limited}px)`;
+  installBtn.style.opacity = String(Math.max(0.35, 1 - Math.abs(limited) / 150));
+});
+
+installBtn.addEventListener('pointerup', () => {
+  if (Math.abs(installDragDeltaX) >= INSTALL_SWIPE_DISMISS_PX) {
+    hideInstallNudge({ swiped: true });
+    installDragStartX = null;
+    installDragDeltaX = 0;
+    return;
+  }
+  resetInstallDrag();
+});
+
+installBtn.addEventListener('pointercancel', resetInstallDrag);
+
 installBtn.addEventListener('click', async () => {
+  if (Math.abs(installDragDeltaX) >= INSTALL_SWIPE_DISMISS_PX) return;
+
   if (!deferredPrompt) {
+    hideInstallNudge();
     toast('Use o menu do navegador e escolha “Instalar app”.');
     return;
   }
+
+  if (installHideTimer) {
+    clearTimeout(installHideTimer);
+    installHideTimer = null;
+  }
+
   deferredPrompt.prompt();
   await deferredPrompt.userChoice;
   deferredPrompt = null;
-  installBtn.hidden = true;
+  hideInstallNudge();
 });
 
 window.addEventListener('appinstalled', () => {
-  installBtn.hidden = true;
+  deferredPrompt = null;
+  hideInstallNudge();
   toast('Remote Link instalado.');
 });
 

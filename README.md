@@ -1,4 +1,4 @@
-# Remote Link Web — v0.3.1
+# Remote Link Web — v0.3.2
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -10,6 +10,9 @@ PWA do Remote Link hospedada no GitHub Pages.
 - Trata autorização, negação, expiração e erros de credenciais.
 - Não armazena a senha temporária após a validação.
 - Mantém o visual e o fluxo já aprovados.
+- O convite de instalação agora aparece por cerca de 8 segundos e some automaticamente.
+- O convite pode ser dispensado com gesto horizontal para a esquerda ou direita.
+- A instalação continua opcional; o app permanece utilizável normalmente pelo navegador.
 
 ## Ainda não implementado
 
