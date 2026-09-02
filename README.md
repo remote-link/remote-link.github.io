@@ -1,4 +1,4 @@
-# Remote Link Web — v0.3.3
+# Remote Link Web — v0.3.4
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -36,3 +36,12 @@ A PWA nunca recebe o token secreto do Agent. A autorização continua sendo feit
 - Usa eventos touch explícitos como fallback para navegadores que cancelam Pointer Events durante gestos.
 - Mantém rolagem vertical normal e só captura o gesto quando o movimento horizontal é dominante.
 - Evita abrir o prompt de instalação ao terminar um swipe.
+
+
+## Ajuste v0.3.4
+
+- Adiciona rodapé clicável `© Remote Link - v0.3.4`.
+- O rodapé abre um modal com identificação do desenvolvedor.
+- Exibe `Desenvolvido por: Mizael Nunes.`
+- Exibe email clicável `mizaelnunes001@hotmail.com`.
+- Modal pode ser fechado pelo botão, toque fora ou tecla Esc.

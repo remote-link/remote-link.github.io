@@ -403,3 +403,33 @@ if ('serviceWorker' in navigator) {
 }
 
 renderTrustedDevices();
+
+
+// Rodapé / modal Sobre — v0.3.4
+const aboutLink = document.getElementById('aboutLink');
+const aboutModal = document.getElementById('aboutModal');
+const aboutModalClose = document.getElementById('aboutModalClose');
+let aboutLastFocus = null;
+
+function openAboutModal() {
+  aboutLastFocus = document.activeElement;
+  aboutModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  aboutModalClose.focus();
+}
+
+function closeAboutModal() {
+  aboutModal.hidden = true;
+  document.body.style.overflow = '';
+  aboutLastFocus?.focus?.();
+}
+
+aboutLink?.addEventListener('click', openAboutModal);
+aboutModalClose?.addEventListener('click', closeAboutModal);
+aboutModal?.addEventListener('click', (event) => {
+  if (event.target === aboutModal) closeAboutModal();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !aboutModal?.hidden) closeAboutModal();
+});
