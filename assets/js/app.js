@@ -15,6 +15,7 @@ const remoteStage = document.getElementById('remoteStage');
 const remoteVideo = document.getElementById('remoteVideo');
 const remoteMediaStatus = document.getElementById('remoteMediaStatus');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
+const mouseControlBtn = document.getElementById('mouseControlBtn');
 const diagRelay = document.getElementById('diagRelay');
 const diagSignaling = document.getElementById('diagSignaling');
 const diagIceGathering = document.getElementById('diagIceGathering');
@@ -122,6 +123,12 @@ let remoteIceQueue = [];
 let localIceQueue = [];
 let viewerOfferSent = false;
 let viewerWebRtcStarting = false;
+let viewerControlChannel = null;
+let mouseControlEnabled = false;
+let pointerGesture = null;
+let lastMouseMoveAt = 0;
+let multiTouchScroll = false;
+let lastTwoFingerY = null;
 
 function setRemoteSessionGuard(enabled) {
   document.documentElement.classList.toggle('remote-session-guard', enabled);
@@ -295,6 +302,73 @@ function sendSignal(kind, data = null) {
   }
 }
 
+function setMouseControlEnabled(enabled, { quiet = false } = {}) {
+  mouseControlEnabled = Boolean(enabled && viewerControlChannel?.readyState === 'open');
+  remoteStage?.classList.toggle('mouse-control-active', mouseControlEnabled);
+  mouseControlBtn?.classList.toggle('active', mouseControlEnabled);
+  mouseControlBtn?.setAttribute('aria-pressed', mouseControlEnabled ? 'true' : 'false');
+
+  if (mouseControlBtn) {
+    const available = viewerControlChannel?.readyState === 'open';
+    mouseControlBtn.disabled = !available;
+    mouseControlBtn.title = available
+      ? (mouseControlEnabled ? 'Mouse — controle ativo' : 'Mouse — ativar controle')
+      : 'Mouse — aguardando canal de controle';
+  }
+
+  if (!quiet && mouseControlEnabled) toast('Controle do mouse ativado. Toque para clicar, segure para clique direito.');
+  if (!quiet && !mouseControlEnabled && viewerControlChannel?.readyState === 'open') toast('Controle do mouse pausado.');
+}
+
+function sendControlMessage(message) {
+  if (!mouseControlEnabled || !viewerControlChannel || viewerControlChannel.readyState !== 'open') return false;
+  try {
+    viewerControlChannel.send(JSON.stringify(message));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getRemotePoint(clientX, clientY) {
+  if (!remoteVideo || !remoteVideo.videoWidth || !remoteVideo.videoHeight) return null;
+  const rect = remoteVideo.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+
+  const videoAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
+  const boxAspect = rect.width / rect.height;
+  let contentWidth = rect.width;
+  let contentHeight = rect.height;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (boxAspect > videoAspect) {
+    contentWidth = rect.height * videoAspect;
+    offsetX = (rect.width - contentWidth) / 2;
+  } else {
+    contentHeight = rect.width / videoAspect;
+    offsetY = (rect.height - contentHeight) / 2;
+  }
+
+  const x = (clientX - rect.left - offsetX) / contentWidth;
+  const y = (clientY - rect.top - offsetY) / contentHeight;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+  return { x, y };
+}
+
+function sendMouseMove(clientX, clientY, force = false) {
+  const now = performance.now();
+  if (!force && now - lastMouseMoveAt < 33) return;
+  const point = getRemotePoint(clientX, clientY);
+  if (!point) return;
+  lastMouseMoveAt = now;
+  sendControlMessage({ type: 'mouse', action: 'move', x: point.x, y: point.y });
+}
+
+function resetPointerGesture() {
+  pointerGesture = null;
+}
+
 function resetRemoteViewer(message = 'Conexão autorizada. Negociando a transmissão da tela via WebRTC...') {
   remoteStage?.classList.remove('media-active');
   if (remoteVideo) {
@@ -306,6 +380,13 @@ function resetRemoteViewer(message = 'Conexão autorizada. Negociando a transmis
 
 function stopViewerWebRtc({ notifyAgent = false } = {}) {
   if (notifyAgent && viewerPeer) sendSignal('bye', { reason: 'viewer-ended' });
+
+  setMouseControlEnabled(false, { quiet: true });
+  if (viewerControlChannel) {
+    try { viewerControlChannel.close(); } catch { }
+  }
+  viewerControlChannel = null;
+  resetPointerGesture();
 
   if (viewerPeer) {
     try { viewerPeer.ontrack = null; } catch { }
@@ -403,6 +484,25 @@ async function startViewerWebRtc(code) {
   viewerPeer = pc;
   refreshPeerDiagnostics(pc);
   diagEvent('PeerConnection criado com STUN Cloudflare.');
+
+  const controlChannel = pc.createDataChannel('remote-link-control-v1', { ordered: true });
+  viewerControlChannel = controlChannel;
+  controlChannel.onopen = () => {
+    diagEvent('DataChannel de controle do mouse conectado.');
+    if (mouseControlBtn) {
+      mouseControlBtn.disabled = false;
+      mouseControlBtn.title = 'Mouse — ativar controle';
+    }
+  };
+  controlChannel.onclose = () => {
+    diagEvent('DataChannel de controle do mouse encerrado.');
+    setMouseControlEnabled(false, { quiet: true });
+    if (viewerControlChannel === controlChannel) viewerControlChannel = null;
+  };
+  controlChannel.onerror = () => {
+    diagEvent('Falha no DataChannel de controle do mouse.');
+    setMouseControlEnabled(false, { quiet: true });
+  };
 
   pc.addTransceiver('video', { direction: 'recvonly' });
   diagEvent('Transceiver de vídeo recvonly criado.');
@@ -779,6 +879,115 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js'));
 }
 
+mouseControlBtn?.addEventListener('click', () => {
+  if (!viewerControlChannel || viewerControlChannel.readyState !== 'open') {
+    toast('O canal de controle ainda não está pronto.');
+    return;
+  }
+  setMouseControlEnabled(!mouseControlEnabled);
+});
+
+remoteStage?.addEventListener('pointerdown', (event) => {
+  if (!mouseControlEnabled || !remoteStage.classList.contains('media-active')) return;
+  if (event.pointerType === 'touch' && multiTouchScroll) return;
+
+  const point = getRemotePoint(event.clientX, event.clientY);
+  if (!point) return;
+  event.preventDefault();
+  try { remoteStage.setPointerCapture?.(event.pointerId); } catch { }
+  pointerGesture = {
+    pointerId: event.pointerId,
+    pointerType: event.pointerType,
+    startX: event.clientX,
+    startY: event.clientY,
+    startedAt: performance.now(),
+    moved: false,
+  };
+  sendMouseMove(event.clientX, event.clientY, true);
+}, { passive: false });
+
+remoteStage?.addEventListener('pointermove', (event) => {
+  if (!mouseControlEnabled || !remoteStage.classList.contains('media-active')) return;
+
+  if (event.pointerType === 'mouse') {
+    sendMouseMove(event.clientX, event.clientY);
+    return;
+  }
+
+  if (!pointerGesture || pointerGesture.pointerId !== event.pointerId || multiTouchScroll) return;
+  event.preventDefault();
+  if (Math.hypot(event.clientX - pointerGesture.startX, event.clientY - pointerGesture.startY) > 10) {
+    pointerGesture.moved = true;
+  }
+  sendMouseMove(event.clientX, event.clientY);
+}, { passive: false });
+
+remoteStage?.addEventListener('pointerup', (event) => {
+  if (!mouseControlEnabled || !pointerGesture || pointerGesture.pointerId !== event.pointerId) return;
+  event.preventDefault();
+  const gesture = pointerGesture;
+  resetPointerGesture();
+  if (multiTouchScroll) return;
+
+  sendMouseMove(event.clientX, event.clientY, true);
+  const duration = performance.now() - gesture.startedAt;
+  const distance = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY);
+  if (!gesture.moved && distance <= 10) {
+    sendControlMessage({ type: 'mouse', action: duration >= 650 ? 'right-click' : 'left-click' });
+  }
+}, { passive: false });
+
+remoteStage?.addEventListener('pointercancel', () => resetPointerGesture(), { passive: true });
+
+remoteStage?.addEventListener('contextmenu', (event) => {
+  if (!mouseControlEnabled) return;
+  event.preventDefault();
+  sendMouseMove(event.clientX, event.clientY, true);
+  sendControlMessage({ type: 'mouse', action: 'right-click' });
+});
+
+remoteStage?.addEventListener('wheel', (event) => {
+  if (!mouseControlEnabled) return;
+  event.preventDefault();
+  sendMouseMove(event.clientX, event.clientY, true);
+  const delta = Math.max(-360, Math.min(360, Math.round(event.deltaY)));
+  if (delta) sendControlMessage({ type: 'mouse', action: 'scroll', delta });
+}, { passive: false });
+
+remoteStage?.addEventListener('touchstart', (event) => {
+  if (!mouseControlEnabled || event.touches.length !== 2) return;
+  multiTouchScroll = true;
+  resetPointerGesture();
+  lastTwoFingerY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+  event.preventDefault();
+}, { passive: false });
+
+remoteStage?.addEventListener('touchmove', (event) => {
+  if (!mouseControlEnabled || !multiTouchScroll || event.touches.length !== 2) return;
+  event.preventDefault();
+  const currentY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+  if (lastTwoFingerY !== null) {
+    const movement = lastTwoFingerY - currentY;
+    if (Math.abs(movement) >= 3) {
+      sendControlMessage({ type: 'mouse', action: 'scroll', delta: Math.round(movement * 5) });
+      lastTwoFingerY = currentY;
+    }
+  }
+}, { passive: false });
+
+remoteStage?.addEventListener('touchend', (event) => {
+  if (event.touches.length < 2) {
+    multiTouchScroll = false;
+    lastTwoFingerY = null;
+  }
+}, { passive: true });
+
+remoteStage?.addEventListener('touchcancel', () => {
+  multiTouchScroll = false;
+  lastTwoFingerY = null;
+  resetPointerGesture();
+}, { passive: true });
+
 fullscreenBtn?.addEventListener('click', async () => {
   try {
     if (!document.fullscreenElement) {
@@ -794,7 +1003,7 @@ fullscreenBtn?.addEventListener('click', async () => {
 renderTrustedDevices();
 
 
-// Rodapé / modal Sobre — v0.4.3
+// Rodapé / modal Sobre — v0.5.0
 const aboutLink = document.getElementById('aboutLink');
 const aboutModal = document.getElementById('aboutModal');
 const aboutModalClose = document.getElementById('aboutModalClose');

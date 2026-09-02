@@ -1,19 +1,19 @@
-# Remote Link Web — v0.4.3
+# Remote Link Web — v0.5.0
 
-PWA de diagnóstico da negociação WebRTC.
+PWA com visualização da tela e primeira etapa de controle remoto por mouse.
 
-## Diagnóstico visível
+## Mouse
 
-Durante a negociação da tela, a PWA mostra:
+O botão 🖱 fica disponível somente quando o WebRTC DataChannel estiver conectado. Ao ativá-lo:
 
-- confirmação do relay Cloudflare;
-- `signalingState`;
-- `iceGatheringState`;
-- `iceConnectionState`;
-- `connectionState`;
-- recebimento do track remoto;
-- último evento relevante da negociação.
+- mover o mouse no desktop move o ponteiro remoto;
+- arrastar um dedo sobre a tela no celular move o ponteiro;
+- toque curto executa clique esquerdo;
+- toque longo (aprox. 650 ms) executa clique direito;
+- clique direito do mouse físico é encaminhado;
+- roda do mouse faz scroll;
+- gesto vertical com dois dedos faz scroll no celular.
 
-A proteção contra pull-to-refresh da v0.4.2 foi preservada.
+Os comandos trafegam diretamente pelo WebRTC DataChannel `remote-link-control-v1`; não passam pelo Worker como comandos de entrada.
 
-Mouse, teclado e clipboard continuam desabilitados.
+A proteção contra pull-to-refresh e o diagnóstico WebRTC continuam ativos. Teclado e clipboard permanecem desabilitados.
