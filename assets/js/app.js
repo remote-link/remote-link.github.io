@@ -1,5 +1,6 @@
 const API_BASE = 'https://remote-link-server.remote-link.workers.dev';
-const POLL_INTERVAL_MS = 2000;
+const WS_BASE = 'wss://remote-link-server.remote-link.workers.dev';
+const FALLBACK_POLL_INTERVAL_MS = 10000;
 
 const views = [...document.querySelectorAll('.view')];
 const installBtn = document.getElementById('installBtn');
@@ -102,6 +103,8 @@ function finishInstallDrag() {
   return false;
 }
 let connectionAttempt = 0;
+let sessionSocket = null;
+let viewerTokenInMemory = null;
 
 function showView(id) {
   views.forEach(v => v.classList.toggle('active', v.id === id));
@@ -195,38 +198,118 @@ function renderTrustedDevices() {
   });
 }
 
-function cancelCurrentAttempt() {
-  connectionAttempt += 1;
+function closeSessionSocket() {
+  if (sessionSocket) {
+    try { sessionSocket.close(1000, 'Remote Link encerrado'); } catch { }
+  }
+  sessionSocket = null;
+  viewerTokenInMemory = null;
 }
 
-async function waitForAuthorization(code, attemptId) {
-  while (attemptId === connectionAttempt) {
-    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-    if (attemptId !== connectionAttempt) return;
+function cancelCurrentAttempt() {
+  connectionAttempt += 1;
+  closeSessionSocket();
+}
 
-    const status = await api(`/api/sessions/${code}/status`, { method: 'GET' });
-
-    if (status.state === 'authorized' && status.authorized === true) {
-      document.getElementById('sessionLabel').textContent = `Código ${code.slice(0,3)} ${code.slice(3)} • autorizado`;
-      showView('sessionView');
-      toast('Conexão autorizada.');
-      return;
-    }
-
-    if (status.state === 'denied') {
-      showView('supportView');
-      setFormError('A pessoa no computador negou a solicitação de acesso.');
-      return;
-    }
-
-    if (status.state === 'expired') {
-      showView('supportView');
-      setFormError('O código expirou. Peça à pessoa para gerar um novo código.');
-      return;
-    }
-
-    connectingText.textContent = 'Solicitação enviada. Aguardando a pessoa clicar em PERMITIR no computador.';
+function applyAuthorizationState(code, status) {
+  if (status.state === 'authorized' && status.authorized === true) {
+    document.getElementById('sessionLabel').textContent = `Código ${code.slice(0,3)} ${code.slice(3)} • autorizado`;
+    showView('sessionView');
+    toast('Conexão autorizada.');
+    return 'authorized';
   }
+
+  if (status.state === 'denied') {
+    closeSessionSocket();
+    showView('supportView');
+    setFormError('A pessoa no computador negou a solicitação de acesso.');
+    return 'denied';
+  }
+
+  if (status.state === 'expired' || status.state === 'closed') {
+    closeSessionSocket();
+    showView('supportView');
+    setFormError(status.state === 'closed'
+      ? 'A sessão foi encerrada no computador remoto.'
+      : 'O código expirou. Peça à pessoa para gerar um novo código.');
+    return status.state;
+  }
+
+  connectingText.textContent = 'Solicitação enviada. Aguardando a pessoa clicar em PERMITIR no computador.';
+  return null;
+}
+
+async function waitForAuthorization(code, viewerToken, attemptId) {
+  viewerTokenInMemory = viewerToken;
+
+  return new Promise((resolve) => {
+    let finished = false;
+    let fallbackBusy = false;
+
+    const finish = (state) => {
+      if (finished) return;
+      finished = true;
+      clearInterval(fallbackTimer);
+      resolve(state);
+    };
+
+    const processState = (status) => {
+      if (attemptId !== connectionAttempt) {
+        finish('cancelled');
+        return;
+      }
+      const terminal = applyAuthorizationState(code, status);
+      if (terminal) finish(terminal);
+    };
+
+    const wsUrl = `${WS_BASE}/api/sessions/${code}/ws?role=viewer&token=${encodeURIComponent(viewerToken)}`;
+    const ws = new WebSocket(wsUrl);
+    sessionSocket = ws;
+
+    ws.addEventListener('open', () => {
+      if (attemptId !== connectionAttempt) {
+        try { ws.close(); } catch { }
+        return;
+      }
+      connectingText.textContent = 'Canal em tempo real conectado. Aguardando autorização no computador.';
+    });
+
+    ws.addEventListener('message', (event) => {
+      if (attemptId !== connectionAttempt) return;
+      try {
+        const message = JSON.parse(event.data);
+        if (message?.type === 'session-state') {
+          processState(message);
+        }
+        // Mensagens type=signal serão usadas pela etapa WebRTC seguinte.
+      } catch { }
+    });
+
+    ws.addEventListener('close', () => {
+      if (!finished && attemptId === connectionAttempt) {
+        connectingText.textContent = 'Canal em tempo real indisponível. Usando verificação de fallback...';
+      }
+    });
+
+    ws.addEventListener('error', () => {
+      if (!finished && attemptId === connectionAttempt) {
+        connectingText.textContent = 'Falha no canal em tempo real. Usando verificação de fallback...';
+      }
+    });
+
+    const fallbackTimer = window.setInterval(async () => {
+      if (finished || fallbackBusy || attemptId !== connectionAttempt) return;
+      fallbackBusy = true;
+      try {
+        const status = await api(`/api/sessions/${code}/status`, { method: 'GET' });
+        processState(status);
+      } catch {
+        // O WebSocket continua sendo o caminho principal.
+      } finally {
+        fallbackBusy = false;
+      }
+    }, FALLBACK_POLL_INTERVAL_MS);
+  });
 }
 
 async function requestTemporaryAccess(code, password) {
@@ -243,14 +326,14 @@ async function requestTemporaryAccess(code, password) {
 
     if (attemptId !== connectionAttempt) return;
 
-    if (result.state !== 'requested') {
+    if (result.state !== 'requested' || !result.viewerToken) {
       throw new Error('UNEXPECTED_SESSION_STATE');
     }
 
     // A senha não é persistida nem reutilizada depois da validação.
     passwordInput.value = '';
     connectingText.textContent = 'Solicitação enviada. Aguardando a pessoa clicar em PERMITIR no computador.';
-    await waitForAuthorization(code, attemptId);
+    await waitForAuthorization(code, result.viewerToken, attemptId);
   } catch (error) {
     if (attemptId !== connectionAttempt) return;
     showView('supportView');
@@ -405,7 +488,7 @@ if ('serviceWorker' in navigator) {
 renderTrustedDevices();
 
 
-// Rodapé / modal Sobre — v0.3.4
+// Rodapé / modal Sobre — v0.4.0
 const aboutLink = document.getElementById('aboutLink');
 const aboutModal = document.getElementById('aboutModal');
 const aboutModalClose = document.getElementById('aboutModalClose');
