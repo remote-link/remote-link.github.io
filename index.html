@@ -131,25 +131,26 @@
         <button id="endSessionBtn" class="danger-btn" type="button">Encerrar</button>
       </header>
 
-      <div class="remote-stage">
-        <div class="remote-placeholder">
+      <div id="remoteStage" class="remote-stage">
+        <video id="remoteVideo" class="remote-video" autoplay playsinline muted></video>
+        <div id="remotePlaceholder" class="remote-placeholder">
           <div class="monitor-icon">▣</div>
           <strong>Área de trabalho remota</strong>
-          <p>Conexão autorizada. Canal de sinalização em tempo real pronto para a negociação WebRTC.</p>
+          <p id="remoteMediaStatus">Conexão autorizada. Negociando a transmissão da tela via WebRTC...</p>
         </div>
       </div>
 
       <nav class="control-bar" aria-label="Controles remotos">
-        <button type="button" title="Mouse">🖱</button>
-        <button type="button" title="Teclado">⌨</button>
-        <button type="button" title="Área de transferência">⧉</button>
-        <button type="button" title="Tela cheia">⛶</button>
+        <button type="button" title="Mouse — próxima etapa" disabled>🖱</button>
+        <button type="button" title="Teclado — próxima etapa" disabled>⌨</button>
+        <button type="button" title="Área de transferência — próxima etapa" disabled>⧉</button>
+        <button id="fullscreenBtn" type="button" title="Tela cheia">⛶</button>
       </nav>
     </section>
 
     <footer class="footer footer-centered">
       <button id="aboutLink" class="footer-about-link" type="button" aria-haspopup="dialog" aria-controls="aboutModal">
-        © Remote Link - v0.4.0
+        © Remote Link - v0.4.1
       </button>
     </footer>
   </main>
@@ -160,7 +161,7 @@
       <h2 id="aboutModalTitle">Remote Link</h2>
       <p><strong>Desenvolvido por:</strong> Mizael Nunes.</p>
       <p><strong>Email:</strong> <a href="mailto:mizaelnunes001@hotmail.com">mizaelnunes001@hotmail.com</a></p>
-      <small>Remote Link • v0.4.0</small>
+      <small>Remote Link • v0.4.1</small>
     </section>
   </div>
 

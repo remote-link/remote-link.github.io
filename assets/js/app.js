@@ -11,6 +11,10 @@ const passwordInput = document.getElementById('sessionPassword');
 const formError = document.getElementById('formError');
 const connectingText = document.getElementById('connectingText');
 const connectSubmitBtn = supportForm.querySelector('button[type="submit"]');
+const remoteStage = document.getElementById('remoteStage');
+const remoteVideo = document.getElementById('remoteVideo');
+const remoteMediaStatus = document.getElementById('remoteMediaStatus');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
 
 let deferredPrompt = null;
 
@@ -105,6 +109,12 @@ function finishInstallDrag() {
 let connectionAttempt = 0;
 let sessionSocket = null;
 let viewerTokenInMemory = null;
+let viewerPeer = null;
+let viewerPeerCode = null;
+let remoteIceQueue = [];
+let localIceQueue = [];
+let viewerOfferSent = false;
+let viewerWebRtcStarting = false;
 
 function showView(id) {
   views.forEach(v => v.classList.toggle('active', v.id === id));
@@ -198,7 +208,45 @@ function renderTrustedDevices() {
   });
 }
 
+function sendSignal(kind, data = null) {
+  if (!sessionSocket || sessionSocket.readyState !== WebSocket.OPEN) return false;
+  try {
+    sessionSocket.send(JSON.stringify({ type: 'signal', kind, data }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resetRemoteViewer(message = 'Conexão autorizada. Negociando a transmissão da tela via WebRTC...') {
+  remoteStage?.classList.remove('media-active');
+  if (remoteVideo) {
+    try { remoteVideo.pause(); } catch { }
+    remoteVideo.srcObject = null;
+  }
+  if (remoteMediaStatus) remoteMediaStatus.textContent = message;
+}
+
+function stopViewerWebRtc({ notifyAgent = false } = {}) {
+  if (notifyAgent && viewerPeer) sendSignal('bye', { reason: 'viewer-ended' });
+
+  if (viewerPeer) {
+    try { viewerPeer.ontrack = null; } catch { }
+    try { viewerPeer.onicecandidate = null; } catch { }
+    try { viewerPeer.close(); } catch { }
+  }
+
+  viewerPeer = null;
+  viewerPeerCode = null;
+  remoteIceQueue = [];
+  localIceQueue = [];
+  viewerOfferSent = false;
+  viewerWebRtcStarting = false;
+  resetRemoteViewer();
+}
+
 function closeSessionSocket() {
+  stopViewerWebRtc({ notifyAgent: false });
   if (sessionSocket) {
     try { sessionSocket.close(1000, 'Remote Link encerrado'); } catch { }
   }
@@ -211,11 +259,130 @@ function cancelCurrentAttempt() {
   closeSessionSocket();
 }
 
+async function handleViewerSignal(message) {
+  if (message?.type !== 'signal') return;
+
+  if (message.kind === 'bye') {
+    stopViewerWebRtc({ notifyAgent: false });
+    if (remoteMediaStatus) remoteMediaStatus.textContent = 'A transmissão da tela foi encerrada pelo computador remoto.';
+    return;
+  }
+
+  const pc = viewerPeer;
+  if (!pc) return;
+
+  try {
+    if (message.kind === 'answer') {
+      const answer = message.data;
+      if (!answer?.sdp) return;
+      await pc.setRemoteDescription({ type: 'answer', sdp: answer.sdp });
+
+      const pending = remoteIceQueue;
+      remoteIceQueue = [];
+      for (const candidate of pending) {
+        await pc.addIceCandidate(candidate);
+      }
+      return;
+    }
+
+    if (message.kind === 'ice' && message.data?.candidate) {
+      if (pc.remoteDescription) {
+        await pc.addIceCandidate(message.data);
+      } else {
+        remoteIceQueue.push(message.data);
+      }
+    }
+  } catch (error) {
+    console.warn('Remote Link WebRTC signal error', error);
+    if (remoteMediaStatus) remoteMediaStatus.textContent = 'Falha durante a negociação da tela. Tente encerrar e conectar novamente.';
+  }
+}
+
+async function startViewerWebRtc(code) {
+  if (viewerWebRtcStarting || (viewerPeer && viewerPeerCode === code)) return;
+  if (!sessionSocket || sessionSocket.readyState !== WebSocket.OPEN) {
+    if (remoteMediaStatus) remoteMediaStatus.textContent = 'Canal de sinalização indisponível para iniciar a tela.';
+    return;
+  }
+
+  viewerWebRtcStarting = true;
+  stopViewerWebRtc({ notifyAgent: false });
+  viewerWebRtcStarting = true;
+  viewerPeerCode = code;
+  resetRemoteViewer('Negociando conexão WebRTC com o computador...');
+
+  const pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.cloudflare.com:3478' },
+    ],
+  });
+  viewerPeer = pc;
+
+  pc.addTransceiver('video', { direction: 'recvonly' });
+
+  pc.ontrack = async (event) => {
+    const stream = event.streams?.[0] || new MediaStream([event.track]);
+    remoteVideo.srcObject = stream;
+    remoteStage?.classList.add('media-active');
+    try { await remoteVideo.play(); } catch { }
+  };
+
+  pc.onicecandidate = (event) => {
+    if (!event.candidate) return;
+    const candidate = event.candidate.toJSON();
+    if (viewerOfferSent) {
+      sendSignal('ice', candidate);
+    } else {
+      localIceQueue.push(candidate);
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    switch (pc.connectionState) {
+      case 'connecting':
+        if (remoteMediaStatus) remoteMediaStatus.textContent = 'Conectando o canal de vídeo...';
+        break;
+      case 'connected':
+        if (remoteMediaStatus) remoteMediaStatus.textContent = 'Tela conectada via WebRTC.';
+        break;
+      case 'disconnected':
+        resetRemoteViewer('WebRTC desconectado. Aguardando recuperação da conexão...');
+        break;
+      case 'failed':
+        resetRemoteViewer('Não foi possível criar a rota WebRTC. Esta rede pode exigir um servidor TURN.');
+        break;
+      case 'closed':
+        resetRemoteViewer('Transmissão da tela encerrada.');
+        break;
+    }
+  };
+
+  try {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    if (!sendSignal('offer', { type: 'offer', sdp: pc.localDescription?.sdp || offer.sdp })) {
+      throw new Error('SIGNAL_SOCKET_NOT_OPEN');
+    }
+    viewerOfferSent = true;
+
+    const queued = localIceQueue;
+    localIceQueue = [];
+    queued.forEach(candidate => sendSignal('ice', candidate));
+  } catch (error) {
+    console.warn('Remote Link WebRTC start error', error);
+    stopViewerWebRtc({ notifyAgent: false });
+    if (remoteMediaStatus) remoteMediaStatus.textContent = 'Falha ao iniciar a transmissão WebRTC.';
+  } finally {
+    viewerWebRtcStarting = false;
+  }
+}
+
 function applyAuthorizationState(code, status) {
   if (status.state === 'authorized' && status.authorized === true) {
     document.getElementById('sessionLabel').textContent = `Código ${code.slice(0,3)} ${code.slice(3)} • autorizado`;
     showView('sessionView');
     toast('Conexão autorizada.');
+    void startViewerWebRtc(code);
     return 'authorized';
   }
 
@@ -280,8 +447,9 @@ async function waitForAuthorization(code, viewerToken, attemptId) {
         const message = JSON.parse(event.data);
         if (message?.type === 'session-state') {
           processState(message);
+        } else if (message?.type === 'signal') {
+          void handleViewerSignal(message);
         }
-        // Mensagens type=signal serão usadas pela etapa WebRTC seguinte.
       } catch { }
     });
 
@@ -361,7 +529,13 @@ document.getElementById('cancelConnectBtn').addEventListener('click', () => {
 });
 
 document.getElementById('endSessionBtn').addEventListener('click', () => {
-  cancelCurrentAttempt();
+  stopViewerWebRtc({ notifyAgent: true });
+  connectionAttempt += 1;
+  if (sessionSocket) {
+    try { sessionSocket.close(1000, 'Remote Link encerrado pelo viewer'); } catch { }
+  }
+  sessionSocket = null;
+  viewerTokenInMemory = null;
   showView('homeView');
   toast('Sessão encerrada neste dispositivo.');
 });
@@ -485,10 +659,22 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js'));
 }
 
+fullscreenBtn?.addEventListener('click', async () => {
+  try {
+    if (!document.fullscreenElement) {
+      await remoteStage?.requestFullscreen?.();
+    } else {
+      await document.exitFullscreen?.();
+    }
+  } catch {
+    toast('Tela cheia não está disponível neste navegador.');
+  }
+});
+
 renderTrustedDevices();
 
 
-// Rodapé / modal Sobre — v0.4.0
+// Rodapé / modal Sobre — v0.4.1
 const aboutLink = document.getElementById('aboutLink');
 const aboutModal = document.getElementById('aboutModal');
 const aboutModalClose = document.getElementById('aboutModalClose');

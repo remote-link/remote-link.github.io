@@ -1,4 +1,4 @@
-# Remote Link Web — v0.4.0
+# Remote Link Web — v0.4.1
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -13,3 +13,13 @@ PWA do Remote Link hospedada no GitHub Pages.
 - Mantidos o rodapé/modal Sobre e o convite de instalação temporário.
 
 Ainda não há transmissão real da tela nesta versão.
+
+
+## Visualizacao da tela via WebRTC — v0.4.1
+
+- PWA cria a oferta WebRTC somente apos a autorizacao local no Agent.
+- Agent transmite somente a tela principal.
+- Primeira calibracao: ate 1280x720, aproximadamente 5 FPS, codec VP8.
+- Mouse, teclado, clipboard e arquivos continuam desabilitados.
+- A sinalizacao passa pelo Cloudflare, mas a midia tenta seguir peer-to-peer via ICE/STUN.
+- Esta etapa usa STUN, sem TURN dedicado; redes com NAT restritivo podem exigir relay TURN em uma etapa posterior.
