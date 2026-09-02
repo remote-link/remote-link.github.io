@@ -1,16 +1,33 @@
-## Hi there 👋
+# Remote Link
 
-<!--
-**remote-link/remote-link** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+PWA leve para acesso e suporte remoto.
 
-Here are some ideas to get you started:
+## Estado atual
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+Versão **v0.1.0** — frontend/protótipo navegável.
+
+Inclui:
+- instalação como PWA;
+- tela inicial responsiva;
+- pareamento por QR Code simulado;
+- conexão temporária por código + senha;
+- tela de conexão;
+- tela de sessão remota simulada;
+- shell offline via Service Worker.
+
+Ainda não inclui:
+- agente Windows;
+- WebRTC real;
+- signaling/auth backend;
+- captura/controle real da área de trabalho.
+
+## Publicação
+
+Este repositório foi preparado para GitHub Pages na raiz:
+
+`https://remote-link.github.io/`
+
+## Segurança
+
+Nenhuma credencial real de acesso remoto deve ser armazenada no GitHub Pages.
+Autenticação, signaling e chaves de sessão serão implementados em backend/agente nas próximas versões.

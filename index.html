@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="description" content="Remote Link — acesso e suporte remoto via PWA">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <title>Remote Link</title>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">RL</div>
+        <div>
+          <strong>Remote Link</strong>
+          <small>Acesso e suporte remoto</small>
+        </div>
+      </div>
+      <button id="installBtn" class="ghost-btn" type="button" hidden>Instalar</button>
+    </header>
+
+    <section id="homeView" class="view active">
+      <div class="hero">
+        <span class="status-dot"></span>
+        <span>Pronto para conectar</span>
+      </div>
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <h2>Meus computadores</h2>
+            <p>Dispositivos confiáveis pareados com esta PWA.</p>
+          </div>
+        </div>
+
+        <div id="trustedList" class="device-list">
+          <div class="empty-state">
+            <div class="empty-icon">⌁</div>
+            <strong>Nenhum computador pareado</strong>
+            <p>Use o QR Code para adicionar seu primeiro dispositivo.</p>
+          </div>
+        </div>
+
+        <button id="pairBtn" class="secondary-btn full" type="button">
+          <span>▣</span> Parear por QR Code
+        </button>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <h2>Suporte remoto</h2>
+            <p>Conecte a uma sessão temporária usando código e senha.</p>
+          </div>
+        </div>
+
+        <button id="supportBtn" class="primary-btn full" type="button">
+          Conectar por código
+        </button>
+      </section>
+    </section>
+
+    <section id="supportView" class="view">
+      <button class="back-btn" data-back type="button">← Voltar</button>
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <h2>Conectar por código</h2>
+            <p>Peça à pessoa o código de 6 dígitos e a senha temporária.</p>
+          </div>
+        </div>
+
+        <form id="supportForm" novalidate>
+          <label for="sessionCode">Código do computador</label>
+          <input id="sessionCode" name="sessionCode" inputmode="numeric" autocomplete="one-time-code"
+                 maxlength="6" placeholder="000 000" aria-describedby="codeHelp">
+          <small id="codeHelp">Use somente os 6 números exibidos no agente remoto.</small>
+
+          <label for="sessionPassword">Senha temporária</label>
+          <input id="sessionPassword" name="sessionPassword" inputmode="numeric" autocomplete="off"
+                 maxlength="8" placeholder="••••">
+
+          <div id="formError" class="form-error" role="alert" hidden></div>
+
+          <button class="primary-btn full" type="submit">Conectar</button>
+        </form>
+      </section>
+    </section>
+
+    <section id="pairView" class="view">
+      <button class="back-btn" data-back type="button">← Voltar</button>
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <h2>Parear por QR Code</h2>
+            <p>Na próxima etapa, a câmera será usada para ler o QR exibido pelo agente Windows.</p>
+          </div>
+        </div>
+
+        <div class="qr-placeholder" aria-hidden="true">
+          <div>▦</div>
+          <span>Leitor QR será conectado ao agente</span>
+        </div>
+
+        <button id="simulatePairBtn" class="secondary-btn full" type="button">
+          Simular pareamento
+        </button>
+      </section>
+    </section>
+
+    <section id="connectingView" class="view">
+      <section class="panel centered">
+        <div class="spinner" aria-hidden="true"></div>
+        <h2>Conectando...</h2>
+        <p id="connectingText">Localizando o computador remoto.</p>
+        <button id="cancelConnectBtn" class="ghost-btn" type="button">Cancelar</button>
+      </section>
+    </section>
+
+    <section id="sessionView" class="view session-view">
+      <header class="session-header">
+        <div>
+          <strong>Sessão remota</strong>
+          <small id="sessionLabel">Conectado</small>
+        </div>
+        <button id="endSessionBtn" class="danger-btn" type="button">Encerrar</button>
+      </header>
+
+      <div class="remote-stage">
+        <div class="remote-placeholder">
+          <div class="monitor-icon">▣</div>
+          <strong>Área de trabalho remota</strong>
+          <p>A transmissão real será ligada ao agente Windows na próxima fase.</p>
+        </div>
+      </div>
+
+      <nav class="control-bar" aria-label="Controles remotos">
+        <button type="button" title="Mouse">🖱</button>
+        <button type="button" title="Teclado">⌨</button>
+        <button type="button" title="Área de transferência">⧉</button>
+        <button type="button" title="Tela cheia">⛶</button>
+      </nav>
+    </section>
+
+    <footer class="footer">
+      <span>Remote Link • v0.1.0</span>
+      <span>Frontend PWA</span>
+    </footer>
+  </main>
+
+  <script type="module" src="/assets/js/app.js"></script>
+</body>
+</html>
