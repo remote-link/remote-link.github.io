@@ -1,16 +1,27 @@
-# Remote Link — Web PWA
+# Remote Link Web — v0.3.1
 
-Versão **v0.2.0**.
+PWA do Remote Link hospedada no GitHub Pages.
 
-Frontend hospedável no GitHub Pages. Mantém a interface aprovada da v0.1 e prepara o fluxo para integração com o RemoteLink Agent.
+## O que mudou
 
-## Nesta versão
-- PWA instalável;
-- conexão por código e senha;
-- pareamento por QR preparado;
-- tela de sessão;
-- shell offline;
-- sem credenciais reais no frontend.
+- `Conectar por código` agora usa o backend real Cloudflare.
+- Envia código + senha temporária para `/api/sessions/request-access`.
+- Aguarda a autorização do Agent consultando o estado da sessão.
+- Trata autorização, negação, expiração e erros de credenciais.
+- Não armazena a senha temporária após a validação.
+- Mantém o visual e o fluxo já aprovados.
 
-## Próxima integração
-A conexão real dependerá de signaling HTTPS/WSS e do agente Windows. O GitHub Pages continua servindo somente a PWA estática.
+## Ainda não implementado
+
+- transmissão de tela via WebRTC;
+- mouse/teclado reais;
+- QR Code real;
+- acesso permanente.
+
+## Backend
+
+`https://remote-link-server.remote-link.workers.dev`
+
+## Segurança
+
+A PWA nunca recebe o token secreto do Agent. A autorização continua sendo feita pelo Agent Windows.

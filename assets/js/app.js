@@ -1,7 +1,18 @@
+const API_BASE = 'https://remote-link-server.remote-link.workers.dev';
+const POLL_INTERVAL_MS = 2000;
+
 const views = [...document.querySelectorAll('.view')];
 const installBtn = document.getElementById('installBtn');
 const trustedList = document.getElementById('trustedList');
+const supportForm = document.getElementById('supportForm');
+const codeInput = document.getElementById('sessionCode');
+const passwordInput = document.getElementById('sessionPassword');
+const formError = document.getElementById('formError');
+const connectingText = document.getElementById('connectingText');
+const connectSubmitBtn = supportForm.querySelector('button[type="submit"]');
+
 let deferredPrompt = null;
+let connectionAttempt = 0;
 
 function showView(id) {
   views.forEach(v => v.classList.toggle('active', v.id === id));
@@ -17,12 +28,67 @@ function toast(message) {
 }
 
 function formatCode(value) {
-  return value.replace(/\D/g, '').slice(0, 6).replace(/(\d{3})(\d{1,3})/, '$1 $2').trim();
+  const digits = value.replace(/\D/g, '').slice(0, 6);
+  return digits.length > 3 ? `${digits.slice(0, 3)} ${digits.slice(3)}` : digits;
+}
+
+function normalizeCode(value) {
+  return String(value || '').replace(/\D/g, '').slice(0, 6);
+}
+
+function setFormError(message = '') {
+  formError.textContent = message;
+  formError.hidden = !message;
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = { ok: false, error: 'INVALID_SERVER_RESPONSE' };
+  }
+
+  if (!response.ok) {
+    const error = new Error(data?.error || `HTTP_${response.status}`);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+function friendlyError(error) {
+  const code = error?.data?.error || error?.message;
+  switch (code) {
+    case 'AUTH_FAILED':
+      return 'Código ou senha temporária inválidos.';
+    case 'SESSION_NOT_FOUND':
+      return 'Sessão não encontrada. Confira o código exibido no computador.';
+    case 'SESSION_EXPIRED':
+      return 'O código expirou. Peça à pessoa para gerar um novo código.';
+    case 'INVALID_CODE':
+    case 'INVALID_PASSWORD':
+    case 'INVALID_SESSION_DATA':
+      return 'Informe um código válido de 6 dígitos e a senha temporária.';
+    default:
+      return 'Não foi possível conectar ao Remote Link Server. Tente novamente.';
+  }
 }
 
 function renderTrustedDevices() {
   const devices = JSON.parse(localStorage.getItem('rl_trusted_devices') || '[]');
   if (!devices.length) return;
+
   trustedList.innerHTML = devices.map(d => `
     <button class="device-card" type="button" data-device-id="${d.id}">
       <span>
@@ -32,48 +98,123 @@ function renderTrustedDevices() {
       <span>›</span>
     </button>
   `).join('');
+
   trustedList.querySelectorAll('.device-card').forEach(btn => {
-    btn.addEventListener('click', () => beginConnection(`Dispositivo ${btn.dataset.deviceId}`));
+    btn.addEventListener('click', () => {
+      toast('Acesso permanente será conectado em uma próxima etapa.');
+    });
   });
 }
 
-function beginConnection(label) {
-  document.getElementById('connectingText').textContent = `Preparando conexão com ${label}.`;
-  showView('connectingView');
-  window.setTimeout(() => {
-    document.getElementById('sessionLabel').textContent = label;
-    showView('sessionView');
-  }, 1300);
+function cancelCurrentAttempt() {
+  connectionAttempt += 1;
 }
 
-document.getElementById('supportBtn').addEventListener('click', () => showView('supportView'));
-document.getElementById('pairBtn').addEventListener('click', () => showView('pairView'));
-document.querySelectorAll('[data-back]').forEach(btn => btn.addEventListener('click', () => showView('homeView')));
-document.getElementById('cancelConnectBtn').addEventListener('click', () => showView('homeView'));
-document.getElementById('endSessionBtn').addEventListener('click', () => {
-  showView('homeView');
-  toast('Sessão encerrada.');
+async function waitForAuthorization(code, attemptId) {
+  while (attemptId === connectionAttempt) {
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+    if (attemptId !== connectionAttempt) return;
+
+    const status = await api(`/api/sessions/${code}/status`, { method: 'GET' });
+
+    if (status.state === 'authorized' && status.authorized === true) {
+      document.getElementById('sessionLabel').textContent = `Código ${code.slice(0,3)} ${code.slice(3)} • autorizado`;
+      showView('sessionView');
+      toast('Conexão autorizada.');
+      return;
+    }
+
+    if (status.state === 'denied') {
+      showView('supportView');
+      setFormError('A pessoa no computador negou a solicitação de acesso.');
+      return;
+    }
+
+    if (status.state === 'expired') {
+      showView('supportView');
+      setFormError('O código expirou. Peça à pessoa para gerar um novo código.');
+      return;
+    }
+
+    connectingText.textContent = 'Solicitação enviada. Aguardando a pessoa clicar em PERMITIR no computador.';
+  }
+}
+
+async function requestTemporaryAccess(code, password) {
+  const attemptId = ++connectionAttempt;
+  setFormError('');
+  showView('connectingView');
+  connectingText.textContent = 'Validando código e senha temporária...';
+
+  try {
+    const result = await api('/api/sessions/request-access', {
+      method: 'POST',
+      body: JSON.stringify({ code, password }),
+    });
+
+    if (attemptId !== connectionAttempt) return;
+
+    if (result.state !== 'requested') {
+      throw new Error('UNEXPECTED_SESSION_STATE');
+    }
+
+    // A senha não é persistida nem reutilizada depois da validação.
+    passwordInput.value = '';
+    connectingText.textContent = 'Solicitação enviada. Aguardando a pessoa clicar em PERMITIR no computador.';
+    await waitForAuthorization(code, attemptId);
+  } catch (error) {
+    if (attemptId !== connectionAttempt) return;
+    showView('supportView');
+    setFormError(friendlyError(error));
+  }
+}
+
+document.getElementById('supportBtn').addEventListener('click', () => {
+  setFormError('');
+  showView('supportView');
 });
 
-const codeInput = document.getElementById('sessionCode');
+document.getElementById('pairBtn').addEventListener('click', () => showView('pairView'));
+
+document.querySelectorAll('[data-back]').forEach(btn => btn.addEventListener('click', () => {
+  cancelCurrentAttempt();
+  setFormError('');
+  showView('homeView');
+}));
+
+document.getElementById('cancelConnectBtn').addEventListener('click', () => {
+  cancelCurrentAttempt();
+  showView('supportView');
+  setFormError('Solicitação cancelada neste dispositivo.');
+});
+
+document.getElementById('endSessionBtn').addEventListener('click', () => {
+  cancelCurrentAttempt();
+  showView('homeView');
+  toast('Sessão encerrada neste dispositivo.');
+});
+
 codeInput.addEventListener('input', () => {
   codeInput.value = formatCode(codeInput.value);
 });
 
-document.getElementById('supportForm').addEventListener('submit', (e) => {
+supportForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const error = document.getElementById('formError');
-  const code = codeInput.value.replace(/\D/g, '');
-  const password = document.getElementById('sessionPassword').value.trim();
 
-  if (code.length !== 6 || password.length < 4) {
-    error.textContent = 'Informe um código válido de 6 dígitos e uma senha temporária.';
-    error.hidden = false;
+  const code = normalizeCode(codeInput.value);
+  const password = passwordInput.value.trim();
+
+  if (code.length !== 6 || !/^\d{4,8}$/.test(password)) {
+    setFormError('Informe um código válido de 6 dígitos e uma senha temporária de 4 a 8 dígitos.');
     return;
   }
 
-  error.hidden = true;
-  beginConnection(`código ${code.slice(0,3)} ${code.slice(3)}`);
+  connectSubmitBtn.disabled = true;
+  try {
+    await requestTemporaryAccess(code, password);
+  } finally {
+    connectSubmitBtn.disabled = false;
+  }
 });
 
 document.getElementById('simulatePairBtn').addEventListener('click', () => {

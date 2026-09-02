@@ -1,0 +1,40 @@
+# Sistema
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+
+# Logs e temporários
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# Variáveis/segredos locais
+.env
+.env.*
+!.env.example
+
+# Certificados e chaves
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Builds locais, caso apareçam futuramente
+dist/
+build/
+out/
+
+# Node, se algum utilitário for usado no futuro
+node_modules/
+
+# Arquivos de teste locais
+coverage/
+.cache/
