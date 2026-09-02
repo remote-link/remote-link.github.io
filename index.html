@@ -155,14 +155,14 @@
       <nav class="control-bar" aria-label="Controles remotos">
         <button id="mouseControlBtn" type="button" title="Mouse — aguardando canal de controle" aria-pressed="false" disabled>🖱</button>
         <button type="button" title="Teclado — próxima etapa" disabled>⌨</button>
-        <button type="button" title="Área de transferência — próxima etapa" disabled>⧉</button>
+        <button id="screensControlBtn" type="button" title="Telas — aguardando informações do computador" disabled>▣</button>
         <button id="fullscreenBtn" type="button" title="Tela cheia">⛶</button>
       </nav>
     </section>
 
     <footer class="footer footer-centered">
       <button id="aboutLink" class="footer-about-link" type="button" aria-haspopup="dialog" aria-controls="aboutModal">
-        © Remote Link - v0.5.0
+        © Remote Link - v0.5.1
       </button>
     </footer>
   </main>
@@ -173,7 +173,16 @@
       <h2 id="aboutModalTitle">Remote Link</h2>
       <p><strong>Desenvolvido por:</strong> Mizael Nunes.</p>
       <p><strong>Email:</strong> <a href="mailto:mizaelnunes001@hotmail.com">mizaelnunes001@hotmail.com</a></p>
-      <small>Remote Link • v0.5.0</small>
+      <small>Remote Link • v0.5.1</small>
+    </section>
+  </div>
+
+  <div id="screensModal" class="modal-backdrop" hidden>
+    <section class="about-modal screens-modal" role="dialog" aria-modal="true" aria-labelledby="screensModalTitle">
+      <button id="screensModalClose" class="modal-close" type="button" aria-label="Fechar">×</button>
+      <h2 id="screensModalTitle">Selecionar tela</h2>
+      <p class="screens-help">Escolha qual monitor do computador remoto deseja visualizar e controlar.</p>
+      <div id="screensList" class="screens-list"></div>
     </section>
   </div>
 

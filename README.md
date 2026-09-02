@@ -1,19 +1,16 @@
-# Remote Link Web — v0.5.0
+# Remote Link Web — v0.5.1
 
-PWA com visualização da tela e primeira etapa de controle remoto por mouse.
+PWA do Remote Link hospedada no GitHub Pages.
 
-## Mouse
+## Novidades v0.5.1
 
-O botão 🖱 fica disponível somente quando o WebRTC DataChannel estiver conectado. Ao ativá-lo:
+- corrige o gesto de mouse no touchscreen Android usando eventos touch explícitos;
+- mantém Pointer Events para mouse/caneta em desktop;
+- adiciona seletor de monitores durante a sessão;
+- recebe do Agent a lista de telas e resolução de cada monitor;
+- troca a tela transmitida sem encerrar a sessão;
+- mantém mouse, clique esquerdo/direito e scroll via WebRTC DataChannel;
+- preserva bloqueio de pull-to-refresh durante a sessão;
+- mantém teclado e clipboard desabilitados nesta etapa.
 
-- mover o mouse no desktop move o ponteiro remoto;
-- arrastar um dedo sobre a tela no celular move o ponteiro;
-- toque curto executa clique esquerdo;
-- toque longo (aprox. 650 ms) executa clique direito;
-- clique direito do mouse físico é encaminhado;
-- roda do mouse faz scroll;
-- gesto vertical com dois dedos faz scroll no celular.
-
-Os comandos trafegam diretamente pelo WebRTC DataChannel `remote-link-control-v1`; não passam pelo Worker como comandos de entrada.
-
-A proteção contra pull-to-refresh e o diagnóstico WebRTC continuam ativos. Teclado e clipboard permanecem desabilitados.
+O servidor Cloudflare não precisa ser alterado para esta versão: vídeo e controle continuam trafegando diretamente pelo WebRTC depois da sinalização.

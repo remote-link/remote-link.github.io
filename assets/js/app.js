@@ -16,6 +16,10 @@ const remoteVideo = document.getElementById('remoteVideo');
 const remoteMediaStatus = document.getElementById('remoteMediaStatus');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
 const mouseControlBtn = document.getElementById('mouseControlBtn');
+const screensControlBtn = document.getElementById('screensControlBtn');
+const screensModal = document.getElementById('screensModal');
+const screensModalClose = document.getElementById('screensModalClose');
+const screensList = document.getElementById('screensList');
 const diagRelay = document.getElementById('diagRelay');
 const diagSignaling = document.getElementById('diagSignaling');
 const diagIceGathering = document.getElementById('diagIceGathering');
@@ -129,6 +133,8 @@ let pointerGesture = null;
 let lastMouseMoveAt = 0;
 let multiTouchScroll = false;
 let lastTwoFingerY = null;
+let remoteMonitors = [];
+let selectedRemoteMonitorIndex = 0;
 
 function setRemoteSessionGuard(enabled) {
   document.documentElement.classList.toggle('remote-session-guard', enabled);
@@ -321,13 +327,93 @@ function setMouseControlEnabled(enabled, { quiet = false } = {}) {
 }
 
 function sendControlMessage(message) {
-  if (!mouseControlEnabled || !viewerControlChannel || viewerControlChannel.readyState !== 'open') return false;
+  if (!mouseControlEnabled) return false;
+  return sendControlRaw(message);
+}
+
+function handleControlChannelMessage(message) {
+  if (!message || typeof message !== 'object') return;
+
+  if (message.type === 'monitors' && Array.isArray(message.items)) {
+    remoteMonitors = message.items;
+    selectedRemoteMonitorIndex = Number.isInteger(message.selectedIndex) ? message.selectedIndex : 0;
+    renderRemoteMonitors();
+    if (screensControlBtn) {
+      screensControlBtn.disabled = remoteMonitors.length === 0;
+      screensControlBtn.classList.toggle('active', remoteMonitors.length > 1);
+      screensControlBtn.title = remoteMonitors.length > 1
+        ? `Telas — ${remoteMonitors.length} monitores disponíveis`
+        : 'Tela remota';
+    }
+    diagEvent(`Agent informou ${remoteMonitors.length} tela(s).`);
+    return;
+  }
+
+  if (message.type === 'screen-selected' && Number.isInteger(message.index)) {
+    selectedRemoteMonitorIndex = message.index;
+    renderRemoteMonitors();
+    toast(`Tela ${message.index + 1} selecionada.`);
+  }
+}
+
+function renderRemoteMonitors() {
+  if (!screensList) return;
+  if (!remoteMonitors.length) {
+    screensList.innerHTML = '<p class="screens-help">Nenhuma informação de monitor recebida.</p>';
+    return;
+  }
+
+  screensList.innerHTML = remoteMonitors.map(monitor => {
+    const active = monitor.index === selectedRemoteMonitorIndex;
+    return `
+      <button class="screen-option${active ? ' active' : ''}" type="button" data-screen-index="${monitor.index}">
+        <span>
+          <strong>${monitor.name || `Tela ${monitor.index + 1}`}</strong>
+          <small>${monitor.width} × ${monitor.height}${monitor.primary ? ' • Principal' : ''}</small>
+        </span>
+        ${active ? '<span class="screen-badge">Em uso</span>' : ''}
+      </button>`;
+  }).join('');
+
+  screensList.querySelectorAll('[data-screen-index]').forEach(button => {
+    button.addEventListener('click', () => {
+      const index = Number(button.dataset.screenIndex);
+      if (!Number.isInteger(index)) return;
+      if (sendControlRaw({ type: 'screen', action: 'select', index })) {
+        selectedRemoteMonitorIndex = index;
+        renderRemoteMonitors();
+        closeScreensModal();
+      }
+    });
+  });
+}
+
+function sendControlRaw(message) {
+  if (!viewerControlChannel || viewerControlChannel.readyState !== 'open') return false;
   try {
     viewerControlChannel.send(JSON.stringify(message));
     return true;
   } catch {
     return false;
   }
+}
+
+function openScreensModal() {
+  if (!screensModal || !remoteMonitors.length) {
+    toast('Aguardando informações das telas do computador.');
+    sendControlRaw({ type: 'screen', action: 'list' });
+    return;
+  }
+  renderRemoteMonitors();
+  screensModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  screensModalClose?.focus();
+}
+
+function closeScreensModal() {
+  if (!screensModal) return;
+  screensModal.hidden = true;
+  document.body.style.overflow = '';
 }
 
 function getRemotePoint(clientX, clientY) {
@@ -386,6 +472,10 @@ function stopViewerWebRtc({ notifyAgent = false } = {}) {
     try { viewerControlChannel.close(); } catch { }
   }
   viewerControlChannel = null;
+  remoteMonitors = [];
+  selectedRemoteMonitorIndex = 0;
+  if (screensControlBtn) screensControlBtn.disabled = true;
+  closeScreensModal();
   resetPointerGesture();
 
   if (viewerPeer) {
@@ -493,6 +583,7 @@ async function startViewerWebRtc(code) {
       mouseControlBtn.disabled = false;
       mouseControlBtn.title = 'Mouse — ativar controle';
     }
+    sendControlRaw({ type: 'screen', action: 'list' });
   };
   controlChannel.onclose = () => {
     diagEvent('DataChannel de controle do mouse encerrado.');
@@ -502,6 +593,14 @@ async function startViewerWebRtc(code) {
   controlChannel.onerror = () => {
     diagEvent('Falha no DataChannel de controle do mouse.');
     setMouseControlEnabled(false, { quiet: true });
+  };
+  controlChannel.onmessage = (event) => {
+    try {
+      const message = JSON.parse(String(event.data || ''));
+      handleControlChannelMessage(message);
+    } catch {
+      diagEvent('Mensagem auxiliar do Agent ignorada.');
+    }
   };
 
   pc.addTransceiver('video', { direction: 'recvonly' });
@@ -888,6 +987,7 @@ mouseControlBtn?.addEventListener('click', () => {
 });
 
 remoteStage?.addEventListener('pointerdown', (event) => {
+  if (event.pointerType === 'touch') return;
   if (!mouseControlEnabled || !remoteStage.classList.contains('media-active')) return;
   if (event.pointerType === 'touch' && multiTouchScroll) return;
 
@@ -907,6 +1007,7 @@ remoteStage?.addEventListener('pointerdown', (event) => {
 }, { passive: false });
 
 remoteStage?.addEventListener('pointermove', (event) => {
+  if (event.pointerType === 'touch') return;
   if (!mouseControlEnabled || !remoteStage.classList.contains('media-active')) return;
 
   if (event.pointerType === 'mouse') {
@@ -923,6 +1024,7 @@ remoteStage?.addEventListener('pointermove', (event) => {
 }, { passive: false });
 
 remoteStage?.addEventListener('pointerup', (event) => {
+  if (event.pointerType === 'touch') return;
   if (!mouseControlEnabled || !pointerGesture || pointerGesture.pointerId !== event.pointerId) return;
   event.preventDefault();
   const gesture = pointerGesture;
@@ -955,38 +1057,101 @@ remoteStage?.addEventListener('wheel', (event) => {
 }, { passive: false });
 
 remoteStage?.addEventListener('touchstart', (event) => {
-  if (!mouseControlEnabled || event.touches.length !== 2) return;
-  multiTouchScroll = true;
-  resetPointerGesture();
-  lastTwoFingerY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+  if (!mouseControlEnabled || !remoteStage.classList.contains('media-active')) return;
+
+  if (event.touches.length === 2) {
+    multiTouchScroll = true;
+    resetPointerGesture();
+    lastTwoFingerY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+    event.preventDefault();
+    return;
+  }
+
+  if (event.touches.length !== 1 || multiTouchScroll) return;
+  const touch = event.touches[0];
+  const point = getRemotePoint(touch.clientX, touch.clientY);
+  if (!point) return;
+
+  pointerGesture = {
+    pointerId: 'touch',
+    pointerType: 'touch',
+    startX: touch.clientX,
+    startY: touch.clientY,
+    lastX: touch.clientX,
+    lastY: touch.clientY,
+    startedAt: performance.now(),
+    moved: false,
+  };
+  sendMouseMove(touch.clientX, touch.clientY, true);
   event.preventDefault();
 }, { passive: false });
 
 remoteStage?.addEventListener('touchmove', (event) => {
-  if (!mouseControlEnabled || !multiTouchScroll || event.touches.length !== 2) return;
-  event.preventDefault();
-  const currentY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-  if (lastTwoFingerY !== null) {
-    const movement = lastTwoFingerY - currentY;
-    if (Math.abs(movement) >= 3) {
-      sendControlMessage({ type: 'mouse', action: 'scroll', delta: Math.round(movement * 5) });
-      lastTwoFingerY = currentY;
+  if (!mouseControlEnabled || !remoteStage.classList.contains('media-active')) return;
+
+  if (multiTouchScroll && event.touches.length === 2) {
+    event.preventDefault();
+    const currentY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+    if (lastTwoFingerY !== null) {
+      const movement = lastTwoFingerY - currentY;
+      if (Math.abs(movement) >= 3) {
+        sendControlMessage({ type: 'mouse', action: 'scroll', delta: Math.round(movement * 5) });
+        lastTwoFingerY = currentY;
+      }
     }
+    return;
   }
+
+  if (!pointerGesture || event.touches.length !== 1) return;
+  const touch = event.touches[0];
+  pointerGesture.lastX = touch.clientX;
+  pointerGesture.lastY = touch.clientY;
+  if (Math.hypot(touch.clientX - pointerGesture.startX, touch.clientY - pointerGesture.startY) > 8) {
+    pointerGesture.moved = true;
+  }
+  sendMouseMove(touch.clientX, touch.clientY);
+  event.preventDefault();
 }, { passive: false });
 
 remoteStage?.addEventListener('touchend', (event) => {
-  if (event.touches.length < 2) {
-    multiTouchScroll = false;
-    lastTwoFingerY = null;
+  if (!mouseControlEnabled) return;
+
+  if (multiTouchScroll) {
+    if (event.touches.length < 2) {
+      multiTouchScroll = false;
+      lastTwoFingerY = null;
+      resetPointerGesture();
+    }
+    return;
   }
-}, { passive: true });
+
+  if (!pointerGesture || pointerGesture.pointerType !== 'touch') return;
+  const gesture = pointerGesture;
+  const changed = event.changedTouches?.[0];
+  const endX = changed?.clientX ?? gesture.lastX ?? gesture.startX;
+  const endY = changed?.clientY ?? gesture.lastY ?? gesture.startY;
+  resetPointerGesture();
+  sendMouseMove(endX, endY, true);
+
+  const duration = performance.now() - gesture.startedAt;
+  const distance = Math.hypot(endX - gesture.startX, endY - gesture.startY);
+  if (!gesture.moved && distance <= 10) {
+    sendControlMessage({ type: 'mouse', action: duration >= 650 ? 'right-click' : 'left-click' });
+  }
+  event.preventDefault();
+}, { passive: false });
 
 remoteStage?.addEventListener('touchcancel', () => {
   multiTouchScroll = false;
   lastTwoFingerY = null;
   resetPointerGesture();
 }, { passive: true });
+
+screensControlBtn?.addEventListener('click', openScreensModal);
+screensModalClose?.addEventListener('click', closeScreensModal);
+screensModal?.addEventListener('click', (event) => {
+  if (event.target === screensModal) closeScreensModal();
+});
 
 fullscreenBtn?.addEventListener('click', async () => {
   try {
@@ -1003,7 +1168,7 @@ fullscreenBtn?.addEventListener('click', async () => {
 renderTrustedDevices();
 
 
-// Rodapé / modal Sobre — v0.5.0
+// Rodapé / modal Sobre — v0.5.1
 const aboutLink = document.getElementById('aboutLink');
 const aboutModal = document.getElementById('aboutModal');
 const aboutModalClose = document.getElementById('aboutModalClose');
@@ -1029,5 +1194,6 @@ aboutModal?.addEventListener('click', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !screensModal?.hidden) closeScreensModal();
   if (event.key === 'Escape' && !aboutModal?.hidden) closeAboutModal();
 });
