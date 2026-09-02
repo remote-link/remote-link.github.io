@@ -1,4 +1,4 @@
-# Remote Link Web — v0.4.1
+# Remote Link Web — v0.4.2
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -23,3 +23,12 @@ Ainda não há transmissão real da tela nesta versão.
 - Mouse, teclado, clipboard e arquivos continuam desabilitados.
 - A sinalizacao passa pelo Cloudflare, mas a midia tenta seguir peer-to-peer via ICE/STUN.
 - Esta etapa usa STUN, sem TURN dedicado; redes com NAT restritivo podem exigir relay TURN em uma etapa posterior.
+
+
+## Protecao contra atualizacao acidental — v0.4.2
+
+- Bloqueia pull-to-refresh do Chrome Android durante a negociacao e a sessao remota.
+- Mantem a rolagem normal fora da sessao.
+- Inclui fallback touch para impedir o gesto de arrastar para baixo no topo da pagina.
+- Ativa protecao contra recarregamento/navegacao acidental enquanto a sessao esta ativa, quando o navegador suporta aviso de saida.
+- Nao altera o signaling nem a negociacao WebRTC da v0.4.1.

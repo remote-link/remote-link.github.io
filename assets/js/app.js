@@ -116,10 +116,52 @@ let localIceQueue = [];
 let viewerOfferSent = false;
 let viewerWebRtcStarting = false;
 
+function setRemoteSessionGuard(enabled) {
+  document.documentElement.classList.toggle('remote-session-guard', enabled);
+  document.body.classList.toggle('remote-session-guard', enabled);
+}
+
 function showView(id) {
   views.forEach(v => v.classList.toggle('active', v.id === id));
+  // Protege a tentativa/sessao contra pull-to-refresh acidental no Android.
+  // A protecao existe apenas enquanto a conexao esta sendo negociada ou ativa.
+  setRemoteSessionGuard(id === 'connectingView' || id === 'sessionView');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+let remotePullStartY = null;
+
+window.addEventListener('touchstart', (event) => {
+  if (!document.documentElement.classList.contains('remote-session-guard')) return;
+  if (event.touches.length !== 1) return;
+  remotePullStartY = event.touches[0].clientY;
+}, { passive: true });
+
+window.addEventListener('touchmove', (event) => {
+  if (!document.documentElement.classList.contains('remote-session-guard')) return;
+  if (remotePullStartY === null || event.touches.length !== 1) return;
+
+  const deltaY = event.touches[0].clientY - remotePullStartY;
+  // No topo da pagina, arrastar para baixo e o gesto que dispara o refresh
+  // nativo do Chrome Android. Bloqueamos somente esse movimento.
+  if (window.scrollY <= 0 && deltaY > 0) {
+    event.preventDefault();
+  }
+}, { passive: false });
+
+window.addEventListener('touchend', () => {
+  remotePullStartY = null;
+}, { passive: true });
+
+window.addEventListener('touchcancel', () => {
+  remotePullStartY = null;
+}, { passive: true });
+
+window.addEventListener('beforeunload', (event) => {
+  if (!document.documentElement.classList.contains('remote-session-guard')) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
 
 function toast(message) {
   const el = document.createElement('div');

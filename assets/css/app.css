@@ -17,3 +17,12 @@
 .control-bar button:disabled{opacity:.42;cursor:not-allowed}
 .remote-stage:fullscreen,.remote-stage:-webkit-full-screen{width:100vw;height:100vh;border-radius:0;background:#000}
 .remote-stage:fullscreen .remote-video,.remote-stage:-webkit-full-screen .remote-video{width:100vw;height:100vh;min-height:100vh;object-fit:contain}
+
+/* Sessao remota: impede o overscroll vertical que aciona pull-to-refresh no Chrome Android. */
+html.remote-session-guard,
+body.remote-session-guard{
+  overscroll-behavior-y:none;
+}
+body.remote-session-guard{
+  overscroll-behavior:none;
+}
