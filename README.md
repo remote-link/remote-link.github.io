@@ -1,33 +1,16 @@
-# Remote Link
+# Remote Link — Web PWA
 
-PWA leve para acesso e suporte remoto.
+Versão **v0.2.0**.
 
-## Estado atual
+Frontend hospedável no GitHub Pages. Mantém a interface aprovada da v0.1 e prepara o fluxo para integração com o RemoteLink Agent.
 
-Versão **v0.1.0** — frontend/protótipo navegável.
+## Nesta versão
+- PWA instalável;
+- conexão por código e senha;
+- pareamento por QR preparado;
+- tela de sessão;
+- shell offline;
+- sem credenciais reais no frontend.
 
-Inclui:
-- instalação como PWA;
-- tela inicial responsiva;
-- pareamento por QR Code simulado;
-- conexão temporária por código + senha;
-- tela de conexão;
-- tela de sessão remota simulada;
-- shell offline via Service Worker.
-
-Ainda não inclui:
-- agente Windows;
-- WebRTC real;
-- signaling/auth backend;
-- captura/controle real da área de trabalho.
-
-## Publicação
-
-Este repositório foi preparado para GitHub Pages na raiz:
-
-`https://remote-link.github.io/`
-
-## Segurança
-
-Nenhuma credencial real de acesso remoto deve ser armazenada no GitHub Pages.
-Autenticação, signaling e chaves de sessão serão implementados em backend/agente nas próximas versões.
+## Próxima integração
+A conexão real dependerá de signaling HTTPS/WSS e do agente Windows. O GitHub Pages continua servindo somente a PWA estática.
