@@ -17,7 +17,10 @@ const INSTALL_NUDGE_VISIBLE_MS = 8000;
 const INSTALL_SWIPE_DISMISS_PX = 48;
 let installHideTimer = null;
 let installDragStartX = null;
+let installDragStartY = null;
 let installDragDeltaX = 0;
+let installDragActive = false;
+let installSwipeDismissed = false;
 
 function hideInstallNudge({ swiped = false } = {}) {
   if (installHideTimer) {
@@ -49,9 +52,54 @@ function showInstallNudge() {
 
 function resetInstallDrag() {
   installDragStartX = null;
+  installDragStartY = null;
   installDragDeltaX = 0;
+  installDragActive = false;
   installBtn.style.transform = '';
   installBtn.style.opacity = '';
+}
+
+function beginInstallDrag(clientX, clientY) {
+  installDragStartX = clientX;
+  installDragStartY = clientY;
+  installDragDeltaX = 0;
+  installDragActive = false;
+  installSwipeDismissed = false;
+}
+
+function moveInstallDrag(clientX, clientY) {
+  if (installDragStartX === null || installDragStartY === null) return false;
+
+  const deltaX = clientX - installDragStartX;
+  const deltaY = clientY - installDragStartY;
+
+  // Só assume o gesto quando o movimento horizontal fica claramente dominante.
+  if (!installDragActive) {
+    if (Math.abs(deltaX) < 8) return false;
+    if (Math.abs(deltaX) <= Math.abs(deltaY)) return false;
+    installDragActive = true;
+  }
+
+  installDragDeltaX = deltaX;
+  const limited = Math.max(-140, Math.min(140, installDragDeltaX));
+  installBtn.style.transform = `translateX(${limited}px)`;
+  installBtn.style.opacity = String(Math.max(0.25, 1 - Math.abs(limited) / 165));
+  return true;
+}
+
+function finishInstallDrag() {
+  if (installDragActive && Math.abs(installDragDeltaX) >= INSTALL_SWIPE_DISMISS_PX) {
+    installSwipeDismissed = true;
+    hideInstallNudge({ swiped: true });
+    installDragStartX = null;
+    installDragStartY = null;
+    installDragDeltaX = 0;
+    installDragActive = false;
+    return true;
+  }
+
+  resetInstallDrag();
+  return false;
 }
 let connectionAttempt = 0;
 
@@ -275,35 +323,57 @@ window.addEventListener('beforeinstallprompt', (e) => {
   showInstallNudge();
 });
 
+// Mouse/caneta: Pointer Events. Em touch usamos eventos touch explícitos,
+// porque alguns Android/Samsung interrompem pointermove ao iniciar um gesto.
 installBtn.addEventListener('pointerdown', (e) => {
-  installDragStartX = e.clientX;
-  installDragDeltaX = 0;
+  if (e.pointerType === 'touch') return;
+  beginInstallDrag(e.clientX, e.clientY);
   installBtn.setPointerCapture?.(e.pointerId);
 });
 
 installBtn.addEventListener('pointermove', (e) => {
-  if (installDragStartX === null) return;
-
-  installDragDeltaX = e.clientX - installDragStartX;
-  const limited = Math.max(-120, Math.min(120, installDragDeltaX));
-  installBtn.style.transform = `translateX(${limited}px)`;
-  installBtn.style.opacity = String(Math.max(0.35, 1 - Math.abs(limited) / 150));
+  if (e.pointerType === 'touch') return;
+  moveInstallDrag(e.clientX, e.clientY);
 });
 
-installBtn.addEventListener('pointerup', () => {
-  if (Math.abs(installDragDeltaX) >= INSTALL_SWIPE_DISMISS_PX) {
-    hideInstallNudge({ swiped: true });
-    installDragStartX = null;
-    installDragDeltaX = 0;
-    return;
-  }
+installBtn.addEventListener('pointerup', (e) => {
+  if (e.pointerType === 'touch') return;
+  finishInstallDrag();
+});
+
+installBtn.addEventListener('pointercancel', (e) => {
+  if (e.pointerType === 'touch') return;
   resetInstallDrag();
 });
 
-installBtn.addEventListener('pointercancel', resetInstallDrag);
+installBtn.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) return;
+  const touch = e.touches[0];
+  beginInstallDrag(touch.clientX, touch.clientY);
+}, { passive: true });
 
-installBtn.addEventListener('click', async () => {
-  if (Math.abs(installDragDeltaX) >= INSTALL_SWIPE_DISMISS_PX) return;
+installBtn.addEventListener('touchmove', (e) => {
+  if (e.touches.length !== 1) return;
+  const touch = e.touches[0];
+  const handled = moveInstallDrag(touch.clientX, touch.clientY);
+  if (handled) e.preventDefault();
+}, { passive: false });
+
+installBtn.addEventListener('touchend', () => {
+  finishInstallDrag();
+}, { passive: true });
+
+installBtn.addEventListener('touchcancel', () => {
+  resetInstallDrag();
+}, { passive: true });
+
+installBtn.addEventListener('click', async (e) => {
+  // Evita que o toque que terminou um swipe também abra o prompt de instalação.
+  if (installSwipeDismissed) {
+    installSwipeDismissed = false;
+    e.preventDefault();
+    return;
+  }
 
   if (!deferredPrompt) {
     hideInstallNudge();

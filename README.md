@@ -1,4 +1,4 @@
-# Remote Link Web — v0.3.2
+# Remote Link Web — v0.3.3
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -28,3 +28,11 @@ PWA do Remote Link hospedada no GitHub Pages.
 ## Segurança
 
 A PWA nunca recebe o token secreto do Agent. A autorização continua sendo feita pelo Agent Windows.
+
+
+## Ajuste v0.3.3
+
+- Corrige o gesto de arrastar o convite **Instalar** em telas touchscreen Android.
+- Usa eventos touch explícitos como fallback para navegadores que cancelam Pointer Events durante gestos.
+- Mantém rolagem vertical normal e só captura o gesto quando o movimento horizontal é dominante.
+- Evita abrir o prompt de instalação ao terminar um swipe.
