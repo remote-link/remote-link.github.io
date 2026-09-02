@@ -137,6 +137,18 @@
           <div class="monitor-icon">▣</div>
           <strong>Área de trabalho remota</strong>
           <p id="remoteMediaStatus">Conexão autorizada. Negociando a transmissão da tela via WebRTC...</p>
+          <details id="webrtcDiagnostics" class="webrtc-diagnostics" open>
+            <summary>Diagnóstico WebRTC</summary>
+            <div class="webrtc-diagnostic-grid">
+              <span>Relay Cloudflare</span><strong id="diagRelay">aguardando</strong>
+              <span>Sinalização</span><strong id="diagSignaling">stable</strong>
+              <span>ICE coleta</span><strong id="diagIceGathering">new</strong>
+              <span>ICE conexão</span><strong id="diagIceConnection">new</strong>
+              <span>Peer</span><strong id="diagPeer">new</strong>
+              <span>Vídeo remoto</span><strong id="diagTrack">aguardando</strong>
+            </div>
+            <small id="diagLastEvent">Preparando diagnóstico...</small>
+          </details>
         </div>
       </div>
 
@@ -150,7 +162,7 @@
 
     <footer class="footer footer-centered">
       <button id="aboutLink" class="footer-about-link" type="button" aria-haspopup="dialog" aria-controls="aboutModal">
-        © Remote Link - v0.4.2
+        © Remote Link - v0.4.3
       </button>
     </footer>
   </main>
@@ -161,7 +173,7 @@
       <h2 id="aboutModalTitle">Remote Link</h2>
       <p><strong>Desenvolvido por:</strong> Mizael Nunes.</p>
       <p><strong>Email:</strong> <a href="mailto:mizaelnunes001@hotmail.com">mizaelnunes001@hotmail.com</a></p>
-      <small>Remote Link • v0.4.2</small>
+      <small>Remote Link • v0.4.3</small>
     </section>
   </div>
 

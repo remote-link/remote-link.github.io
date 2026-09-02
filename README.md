@@ -1,34 +1,19 @@
-# Remote Link Web — v0.4.2
+# Remote Link Web — v0.4.3
 
-PWA do Remote Link hospedada no GitHub Pages.
+PWA de diagnóstico da negociação WebRTC.
 
-## Novidade desta versão
+## Diagnóstico visível
 
-- A autorização passa a usar WebSocket em tempo real como caminho principal.
-- Após validar código + senha, a PWA recebe um `viewerToken` efêmero.
-- O token permanece somente na memória da página; não é salvo em LocalStorage.
-- A resposta PERMITIR/NEGAR do Agent chega imediatamente pela conexão WebSocket.
-- Consulta HTTP a cada 10 segundos permanece como fallback.
-- O canal já aceita mensagens de sinalização WebRTC (`offer`, `answer`, `ice`) para a próxima etapa.
-- Mantidos o rodapé/modal Sobre e o convite de instalação temporário.
+Durante a negociação da tela, a PWA mostra:
 
-Ainda não há transmissão real da tela nesta versão.
+- confirmação do relay Cloudflare;
+- `signalingState`;
+- `iceGatheringState`;
+- `iceConnectionState`;
+- `connectionState`;
+- recebimento do track remoto;
+- último evento relevante da negociação.
 
+A proteção contra pull-to-refresh da v0.4.2 foi preservada.
 
-## Visualizacao da tela via WebRTC — v0.4.1
-
-- PWA cria a oferta WebRTC somente apos a autorizacao local no Agent.
-- Agent transmite somente a tela principal.
-- Primeira calibracao: ate 1280x720, aproximadamente 5 FPS, codec VP8.
-- Mouse, teclado, clipboard e arquivos continuam desabilitados.
-- A sinalizacao passa pelo Cloudflare, mas a midia tenta seguir peer-to-peer via ICE/STUN.
-- Esta etapa usa STUN, sem TURN dedicado; redes com NAT restritivo podem exigir relay TURN em uma etapa posterior.
-
-
-## Protecao contra atualizacao acidental — v0.4.2
-
-- Bloqueia pull-to-refresh do Chrome Android durante a negociacao e a sessao remota.
-- Mantem a rolagem normal fora da sessao.
-- Inclui fallback touch para impedir o gesto de arrastar para baixo no topo da pagina.
-- Ativa protecao contra recarregamento/navegacao acidental enquanto a sessao esta ativa, quando o navegador suporta aviso de saida.
-- Nao altera o signaling nem a negociacao WebRTC da v0.4.1.
+Mouse, teclado e clipboard continuam desabilitados.

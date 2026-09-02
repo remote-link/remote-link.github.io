@@ -26,3 +26,7 @@ body.remote-session-guard{
 body.remote-session-guard{
   overscroll-behavior:none;
 }
+
+
+/* Diagnóstico WebRTC — v0.4.3 */
+.webrtc-diagnostics{margin:18px auto 0;width:min(100%,440px);text-align:left;border:1px solid rgba(145,160,183,.18);border-radius:14px;background:rgba(8,19,33,.82);padding:10px 12px;color:#b7c5d8}.webrtc-diagnostics summary{cursor:pointer;font-weight:700;color:#dce7f6}.webrtc-diagnostic-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;margin-top:10px;font-size:.78rem}.webrtc-diagnostic-grid span{color:#91a0b7}.webrtc-diagnostic-grid strong{color:#dce7f6;font-weight:650;text-align:right;max-width:160px;overflow-wrap:anywhere}.webrtc-diagnostics>small{display:block;margin-top:10px;padding-top:9px;border-top:1px solid rgba(145,160,183,.12);color:#7fa2c7;line-height:1.4}.remote-stage.media-active .webrtc-diagnostics{display:none}

@@ -15,6 +15,13 @@ const remoteStage = document.getElementById('remoteStage');
 const remoteVideo = document.getElementById('remoteVideo');
 const remoteMediaStatus = document.getElementById('remoteMediaStatus');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
+const diagRelay = document.getElementById('diagRelay');
+const diagSignaling = document.getElementById('diagSignaling');
+const diagIceGathering = document.getElementById('diagIceGathering');
+const diagIceConnection = document.getElementById('diagIceConnection');
+const diagPeer = document.getElementById('diagPeer');
+const diagTrack = document.getElementById('diagTrack');
+const diagLastEvent = document.getElementById('diagLastEvent');
 
 let deferredPrompt = null;
 
@@ -250,6 +257,34 @@ function renderTrustedDevices() {
   });
 }
 
+function setDiag(element, value) {
+  if (element) element.textContent = String(value ?? '—');
+}
+
+function diagEvent(message) {
+  const stamp = new Date().toLocaleTimeString('pt-BR', { hour12: false });
+  if (diagLastEvent) diagLastEvent.textContent = `${stamp} • ${message}`;
+  console.info(`[Remote Link WebRTC ${stamp}] ${message}`);
+}
+
+function resetDiagnostics() {
+  setDiag(diagRelay, 'aguardando');
+  setDiag(diagSignaling, 'stable');
+  setDiag(diagIceGathering, 'new');
+  setDiag(diagIceConnection, 'new');
+  setDiag(diagPeer, 'new');
+  setDiag(diagTrack, 'aguardando');
+  diagEvent('Diagnóstico reiniciado.');
+}
+
+function refreshPeerDiagnostics(pc) {
+  if (!pc) return;
+  setDiag(diagSignaling, pc.signalingState);
+  setDiag(diagIceGathering, pc.iceGatheringState);
+  setDiag(diagIceConnection, pc.iceConnectionState);
+  setDiag(diagPeer, pc.connectionState);
+}
+
 function sendSignal(kind, data = null) {
   if (!sessionSocket || sessionSocket.readyState !== WebSocket.OPEN) return false;
   try {
@@ -317,7 +352,10 @@ async function handleViewerSignal(message) {
     if (message.kind === 'answer') {
       const answer = message.data;
       if (!answer?.sdp) return;
+      diagEvent(`Answer recebido (${answer.sdp.length} caracteres).`);
       await pc.setRemoteDescription({ type: 'answer', sdp: answer.sdp });
+      refreshPeerDiagnostics(pc);
+      diagEvent('Remote description (answer) aplicada.');
 
       const pending = remoteIceQueue;
       remoteIceQueue = [];
@@ -328,10 +366,13 @@ async function handleViewerSignal(message) {
     }
 
     if (message.kind === 'ice' && message.data?.candidate) {
+      diagEvent('ICE remoto recebido.');
       if (pc.remoteDescription) {
         await pc.addIceCandidate(message.data);
+        diagEvent('ICE remoto aplicado.');
       } else {
         remoteIceQueue.push(message.data);
+        diagEvent('ICE remoto enfileirado aguardando answer.');
       }
     }
   } catch (error) {
@@ -352,6 +393,7 @@ async function startViewerWebRtc(code) {
   viewerWebRtcStarting = true;
   viewerPeerCode = code;
   resetRemoteViewer('Negociando conexão WebRTC com o computador...');
+  resetDiagnostics();
 
   const pc = new RTCPeerConnection({
     iceServers: [
@@ -359,10 +401,15 @@ async function startViewerWebRtc(code) {
     ],
   });
   viewerPeer = pc;
+  refreshPeerDiagnostics(pc);
+  diagEvent('PeerConnection criado com STUN Cloudflare.');
 
   pc.addTransceiver('video', { direction: 'recvonly' });
+  diagEvent('Transceiver de vídeo recvonly criado.');
 
   pc.ontrack = async (event) => {
+    setDiag(diagTrack, `${event.track.kind} recebido`);
+    diagEvent(`Track remoto recebido: ${event.track.kind}.`);
     const stream = event.streams?.[0] || new MediaStream([event.track]);
     remoteVideo.srcObject = stream;
     remoteStage?.classList.add('media-active');
@@ -370,8 +417,13 @@ async function startViewerWebRtc(code) {
   };
 
   pc.onicecandidate = (event) => {
-    if (!event.candidate) return;
+    if (!event.candidate) {
+      diagEvent('Coleta de ICE local concluída.');
+      refreshPeerDiagnostics(pc);
+      return;
+    }
     const candidate = event.candidate.toJSON();
+    diagEvent(`ICE local gerado: ${event.candidate.type || 'tipo desconhecido'}.`);
     if (viewerOfferSent) {
       sendSignal('ice', candidate);
     } else {
@@ -379,7 +431,24 @@ async function startViewerWebRtc(code) {
     }
   };
 
+  pc.onsignalingstatechange = () => {
+    refreshPeerDiagnostics(pc);
+    diagEvent(`Signaling state: ${pc.signalingState}.`);
+  };
+
+  pc.onicegatheringstatechange = () => {
+    refreshPeerDiagnostics(pc);
+    diagEvent(`ICE gathering: ${pc.iceGatheringState}.`);
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    refreshPeerDiagnostics(pc);
+    diagEvent(`ICE connection: ${pc.iceConnectionState}.`);
+  };
+
   pc.onconnectionstatechange = () => {
+    refreshPeerDiagnostics(pc);
+    diagEvent(`Peer connection: ${pc.connectionState}.`);
     switch (pc.connectionState) {
       case 'connecting':
         if (remoteMediaStatus) remoteMediaStatus.textContent = 'Conectando o canal de vídeo...';
@@ -401,11 +470,15 @@ async function startViewerWebRtc(code) {
 
   try {
     const offer = await pc.createOffer();
+    diagEvent(`Offer criado (${offer.sdp?.length || 0} caracteres).`);
     await pc.setLocalDescription(offer);
+    refreshPeerDiagnostics(pc);
+    diagEvent('Local description (offer) aplicada.');
     if (!sendSignal('offer', { type: 'offer', sdp: pc.localDescription?.sdp || offer.sdp })) {
       throw new Error('SIGNAL_SOCKET_NOT_OPEN');
     }
     viewerOfferSent = true;
+    diagEvent('Offer enviado ao Cloudflare.');
 
     const queued = localIceQueue;
     localIceQueue = [];
@@ -481,6 +554,7 @@ async function waitForAuthorization(code, viewerToken, attemptId) {
         return;
       }
       connectingText.textContent = 'Canal em tempo real conectado. Aguardando autorização no computador.';
+      diagEvent('WebSocket viewer conectado.');
     });
 
     ws.addEventListener('message', (event) => {
@@ -490,7 +564,11 @@ async function waitForAuthorization(code, viewerToken, attemptId) {
         if (message?.type === 'session-state') {
           processState(message);
         } else if (message?.type === 'signal') {
+          diagEvent(`Sinal recebido via Cloudflare: ${message.kind || 'desconhecido'}.`);
           void handleViewerSignal(message);
+        } else if (message?.type === 'signal-ack') {
+          setDiag(diagRelay, `${message.kind || 'sinal'} encaminhado`);
+          diagEvent(`ACK do relay Cloudflare: ${message.kind || 'sinal'}.`);
         }
       } catch { }
     });
@@ -716,7 +794,7 @@ fullscreenBtn?.addEventListener('click', async () => {
 renderTrustedDevices();
 
 
-// Rodapé / modal Sobre — v0.4.1
+// Rodapé / modal Sobre — v0.4.3
 const aboutLink = document.getElementById('aboutLink');
 const aboutModal = document.getElementById('aboutModal');
 const aboutModalClose = document.getElementById('aboutModalClose');
