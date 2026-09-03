@@ -154,7 +154,7 @@
 
       <nav class="control-bar" aria-label="Controles remotos">
         <button id="mouseControlBtn" type="button" title="Mouse — aguardando canal de controle" aria-pressed="false" disabled>🖱</button>
-        <button type="button" title="Teclado — próxima etapa" disabled>⌨</button>
+        <button id="keyboardControlBtn" type="button" title="Teclado — aguardando canal de controle" aria-pressed="false" disabled>⌨</button>
         <button id="screensControlBtn" type="button" title="Telas — aguardando informações do computador" disabled>▣</button>
         <button id="fullscreenBtn" type="button" title="Tela cheia">⛶</button>
       </nav>
@@ -162,7 +162,7 @@
 
     <footer class="footer footer-centered">
       <button id="aboutLink" class="footer-about-link" type="button" aria-haspopup="dialog" aria-controls="aboutModal">
-        © Remote Link - v0.5.1
+        © Remote Link - v0.5.3
       </button>
     </footer>
   </main>
@@ -173,7 +173,7 @@
       <h2 id="aboutModalTitle">Remote Link</h2>
       <p><strong>Desenvolvido por:</strong> Mizael Nunes.</p>
       <p><strong>Email:</strong> <a href="mailto:mizaelnunes001@hotmail.com">mizaelnunes001@hotmail.com</a></p>
-      <small>Remote Link • v0.5.1</small>
+      <small>Remote Link • v0.5.3</small>
     </section>
   </div>
 
@@ -183,6 +183,31 @@
       <h2 id="screensModalTitle">Selecionar tela</h2>
       <p class="screens-help">Escolha qual monitor do computador remoto deseja visualizar e controlar.</p>
       <div id="screensList" class="screens-list"></div>
+    </section>
+  </div>
+
+
+  <div id="keyboardModal" class="modal-backdrop" hidden>
+    <section class="about-modal keyboard-modal" role="dialog" aria-modal="true" aria-labelledby="keyboardModalTitle">
+      <button id="keyboardModalClose" class="modal-close" type="button" aria-label="Fechar">×</button>
+      <h2 id="keyboardModalTitle">Teclado remoto</h2>
+      <p class="keyboard-help">Toque no campo abaixo para abrir o teclado do celular. O texto será enviado para a janela que estiver com foco no computador remoto.</p>
+      <textarea id="remoteKeyboardInput" class="remote-keyboard-input" rows="3" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="Toque aqui e digite..."></textarea>
+      <div id="keyboardQuickKeys" class="keyboard-quick-keys" aria-label="Teclas rápidas">
+        <button type="button" data-key="Escape">Esc</button>
+        <button type="button" data-key="Tab">Tab</button>
+        <button type="button" data-key="Enter">Enter</button>
+        <button type="button" data-key="Backspace">⌫</button>
+        <button type="button" data-key="ArrowLeft">←</button>
+        <button type="button" data-key="ArrowUp">↑</button>
+        <button type="button" data-key="ArrowDown">↓</button>
+        <button type="button" data-key="ArrowRight">→</button>
+        <button type="button" data-shortcut="Control+a">Ctrl+A</button>
+        <button type="button" data-shortcut="Control+c">Ctrl+C</button>
+        <button type="button" data-shortcut="Control+v">Ctrl+V</button>
+        <button type="button" data-shortcut="Control+x">Ctrl+X</button>
+      </div>
+      <small>Ctrl+C/V atuam no clipboard do próprio computador remoto. Transferência de clipboard entre os dispositivos será uma etapa separada.</small>
     </section>
   </div>
 

@@ -16,6 +16,11 @@ const remoteVideo = document.getElementById('remoteVideo');
 const remoteMediaStatus = document.getElementById('remoteMediaStatus');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
 const mouseControlBtn = document.getElementById('mouseControlBtn');
+const keyboardControlBtn = document.getElementById('keyboardControlBtn');
+const keyboardModal = document.getElementById('keyboardModal');
+const keyboardModalClose = document.getElementById('keyboardModalClose');
+const remoteKeyboardInput = document.getElementById('remoteKeyboardInput');
+const keyboardQuickKeys = document.getElementById('keyboardQuickKeys');
 const screensControlBtn = document.getElementById('screensControlBtn');
 const screensModal = document.getElementById('screensModal');
 const screensModalClose = document.getElementById('screensModalClose');
@@ -129,6 +134,9 @@ let viewerOfferSent = false;
 let viewerWebRtcStarting = false;
 let viewerControlChannel = null;
 let mouseControlEnabled = false;
+let keyboardControlEnabled = false;
+let lastKeyboardSpecial = { key: null, at: 0 };
+let keyboardComposing = false;
 let pointerGesture = null;
 let lastMouseMoveAt = 0;
 let multiTouchScroll = false;
@@ -326,6 +334,66 @@ function setMouseControlEnabled(enabled, { quiet = false } = {}) {
   if (!quiet && !mouseControlEnabled && viewerControlChannel?.readyState === 'open') toast('Controle do mouse pausado.');
 }
 
+function setKeyboardControlEnabled(enabled, { quiet = false } = {}) {
+  keyboardControlEnabled = Boolean(enabled && viewerControlChannel?.readyState === 'open');
+  keyboardControlBtn?.classList.toggle('active', keyboardControlEnabled);
+  keyboardControlBtn?.setAttribute('aria-pressed', keyboardControlEnabled ? 'true' : 'false');
+
+  if (keyboardControlBtn) {
+    const available = viewerControlChannel?.readyState === 'open';
+    keyboardControlBtn.disabled = !available;
+    keyboardControlBtn.title = available
+      ? (keyboardControlEnabled ? 'Teclado — controle ativo' : 'Teclado — abrir teclado remoto')
+      : 'Teclado — aguardando canal de controle';
+  }
+
+  if (!quiet && keyboardControlEnabled) toast('Teclado remoto ativado. Digite no campo para enviar ao computador.');
+  if (!quiet && !keyboardControlEnabled && viewerControlChannel?.readyState === 'open') toast('Teclado remoto pausado.');
+}
+
+function openKeyboardModal() {
+  if (!viewerControlChannel || viewerControlChannel.readyState !== 'open') {
+    toast('O canal de controle ainda não está pronto.');
+    return;
+  }
+  setKeyboardControlEnabled(true, { quiet: true });
+  keyboardModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  window.setTimeout(() => remoteKeyboardInput?.focus({ preventScroll: true }), 30);
+}
+
+function closeKeyboardModal() {
+  if (!keyboardModal) return;
+  keyboardModal.hidden = true;
+  try { remoteKeyboardInput?.blur(); } catch { }
+  if (remoteKeyboardInput) remoteKeyboardInput.value = '';
+  document.body.style.overflow = '';
+  setKeyboardControlEnabled(false, { quiet: true });
+}
+
+function sendKeyboardText(text) {
+  if (!keyboardControlEnabled || !text) return false;
+  return sendControlRaw({ type: 'keyboard', action: 'text', text: String(text).slice(0, 256) });
+}
+
+function sendKeyboardKey(key) {
+  if (!keyboardControlEnabled || !key) return false;
+  return sendControlRaw({ type: 'keyboard', action: 'key', key });
+}
+
+function sendKeyboardShortcut(modifiers, key) {
+  if (!keyboardControlEnabled || !key) return false;
+  return sendControlRaw({ type: 'keyboard', action: 'shortcut', modifiers, key });
+}
+
+function noteKeyboardSpecial(key) {
+  lastKeyboardSpecial = { key, at: performance.now() };
+}
+
+function keyboardSpecialWasJustSent(key) {
+  return lastKeyboardSpecial.key === key && performance.now() - lastKeyboardSpecial.at < 120;
+}
+
 function sendControlMessage(message) {
   if (!mouseControlEnabled) return false;
   return sendControlRaw(message);
@@ -468,6 +536,8 @@ function stopViewerWebRtc({ notifyAgent = false } = {}) {
   if (notifyAgent && viewerPeer) sendSignal('bye', { reason: 'viewer-ended' });
 
   setMouseControlEnabled(false, { quiet: true });
+  setKeyboardControlEnabled(false, { quiet: true });
+  closeKeyboardModal();
   if (viewerControlChannel) {
     try { viewerControlChannel.close(); } catch { }
   }
@@ -578,21 +648,29 @@ async function startViewerWebRtc(code) {
   const controlChannel = pc.createDataChannel('remote-link-control-v1', { ordered: true });
   viewerControlChannel = controlChannel;
   controlChannel.onopen = () => {
-    diagEvent('DataChannel de controle do mouse conectado.');
+    diagEvent('DataChannel de controle conectado (mouse/teclado).');
     if (mouseControlBtn) {
       mouseControlBtn.disabled = false;
       mouseControlBtn.title = 'Mouse — ativar controle';
     }
+    if (keyboardControlBtn) {
+      keyboardControlBtn.disabled = false;
+      keyboardControlBtn.title = 'Teclado — abrir teclado remoto';
+    }
     sendControlRaw({ type: 'screen', action: 'list' });
   };
   controlChannel.onclose = () => {
-    diagEvent('DataChannel de controle do mouse encerrado.');
+    diagEvent('DataChannel de controle encerrado.');
     setMouseControlEnabled(false, { quiet: true });
+    setKeyboardControlEnabled(false, { quiet: true });
+    closeKeyboardModal();
     if (viewerControlChannel === controlChannel) viewerControlChannel = null;
   };
   controlChannel.onerror = () => {
-    diagEvent('Falha no DataChannel de controle do mouse.');
+    diagEvent('Falha no DataChannel de controle.');
     setMouseControlEnabled(false, { quiet: true });
+    setKeyboardControlEnabled(false, { quiet: true });
+    closeKeyboardModal();
   };
   controlChannel.onmessage = (event) => {
     try {
@@ -986,6 +1064,113 @@ mouseControlBtn?.addEventListener('click', () => {
   setMouseControlEnabled(!mouseControlEnabled);
 });
 
+keyboardControlBtn?.addEventListener('click', () => {
+  if (keyboardModal?.hidden === false) {
+    closeKeyboardModal();
+  } else {
+    openKeyboardModal();
+  }
+});
+
+keyboardModalClose?.addEventListener('click', closeKeyboardModal);
+keyboardModal?.addEventListener('click', (event) => {
+  if (event.target === keyboardModal) closeKeyboardModal();
+});
+
+remoteKeyboardInput?.addEventListener('keydown', (event) => {
+  if (!keyboardControlEnabled) return;
+
+  const modifiers = [];
+  if (event.ctrlKey) modifiers.push('Control');
+  if (event.shiftKey) modifiers.push('Shift');
+  if (event.altKey) modifiers.push('Alt');
+
+  if ((event.ctrlKey || event.altKey) && event.key && event.key.length === 1) {
+    event.preventDefault();
+    event.stopPropagation();
+    sendKeyboardShortcut(modifiers, event.key);
+    noteKeyboardSpecial(`shortcut:${event.key}`);
+    return;
+  }
+
+  const specialKeys = new Set([
+    'Enter', 'Backspace', 'Tab', 'Escape', 'ArrowLeft', 'ArrowRight',
+    'ArrowUp', 'ArrowDown', 'Delete', 'Home', 'End'
+  ]);
+  if (specialKeys.has(event.key)) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (modifiers.length) sendKeyboardShortcut(modifiers, event.key);
+    else sendKeyboardKey(event.key);
+    noteKeyboardSpecial(event.key);
+  }
+});
+
+remoteKeyboardInput?.addEventListener('compositionstart', () => {
+  keyboardComposing = true;
+});
+
+remoteKeyboardInput?.addEventListener('compositionend', (event) => {
+  keyboardComposing = false;
+  if (!keyboardControlEnabled) return;
+  const text = event.data || remoteKeyboardInput?.value || '';
+  if (text) sendKeyboardText(text);
+  if (remoteKeyboardInput) remoteKeyboardInput.value = '';
+});
+
+remoteKeyboardInput?.addEventListener('beforeinput', (event) => {
+  if (!keyboardControlEnabled) return;
+  const type = event.inputType || '';
+  if (keyboardComposing || type === 'insertCompositionText') return;
+
+  let key = null;
+  if (type === 'deleteContentBackward') key = 'Backspace';
+  else if (type === 'deleteContentForward') key = 'Delete';
+  else if (type === 'insertLineBreak' || type === 'insertParagraph') key = 'Enter';
+
+  if (key) {
+    if (!keyboardSpecialWasJustSent(key)) sendKeyboardKey(key);
+    noteKeyboardSpecial(key);
+    if (event.cancelable) event.preventDefault();
+    return;
+  }
+
+  if ((type === 'insertText' || type === 'insertReplacementText') && event.data) {
+    sendKeyboardText(event.data);
+    if (event.cancelable) event.preventDefault();
+  }
+});
+
+remoteKeyboardInput?.addEventListener('input', () => {
+  if (!keyboardControlEnabled || !remoteKeyboardInput || keyboardComposing) return;
+  // Fallback para navegadores que não expõem beforeinput.data (ex.: alguns casos de colar/autocorreção).
+  const text = remoteKeyboardInput.value;
+  if (text) sendKeyboardText(text);
+  remoteKeyboardInput.value = '';
+});
+
+keyboardQuickKeys?.addEventListener('pointerdown', (event) => {
+  // Mantém o foco no campo para o teclado virtual não recolher no Android.
+  const button = event.target.closest('button');
+  if (button) event.preventDefault();
+});
+
+keyboardQuickKeys?.addEventListener('click', (event) => {
+  const button = event.target.closest('button');
+  if (!button || !keyboardControlEnabled) return;
+
+  const key = button.dataset.key;
+  const shortcut = button.dataset.shortcut;
+  if (key) {
+    sendKeyboardKey(key);
+    noteKeyboardSpecial(key);
+  } else if (shortcut) {
+    const [modifierPart, shortcutKey] = shortcut.split('+');
+    if (modifierPart && shortcutKey) sendKeyboardShortcut([modifierPart], shortcutKey);
+  }
+  window.setTimeout(() => remoteKeyboardInput?.focus({ preventScroll: true }), 0);
+});
+
 remoteStage?.addEventListener('pointerdown', (event) => {
   if (event.pointerType === 'touch') return;
   if (!mouseControlEnabled || !remoteStage.classList.contains('media-active')) return;
@@ -1168,7 +1353,7 @@ fullscreenBtn?.addEventListener('click', async () => {
 renderTrustedDevices();
 
 
-// Rodapé / modal Sobre — v0.5.1
+// Rodapé / modal Sobre — v0.5.3
 const aboutLink = document.getElementById('aboutLink');
 const aboutModal = document.getElementById('aboutModal');
 const aboutModalClose = document.getElementById('aboutModalClose');
@@ -1194,6 +1379,7 @@ aboutModal?.addEventListener('click', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !keyboardModal?.hidden) closeKeyboardModal();
   if (event.key === 'Escape' && !screensModal?.hidden) closeScreensModal();
   if (event.key === 'Escape' && !aboutModal?.hidden) closeAboutModal();
 });
