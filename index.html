@@ -54,14 +54,22 @@
       <section class="panel">
         <div class="section-title">
           <div>
-            <h2>Suporte remoto</h2>
-            <p>Conecte a uma sessão temporária usando código e senha.</p>
+            <h2>Suporte remoto supervisionado</h2>
+            <p>Conecte usando apenas o código temporário. A pessoa no PC deverá clicar em PERMITIR.</p>
           </div>
         </div>
 
         <button id="supportBtn" class="primary-btn full" type="button">
           Conectar por código
         </button>
+      </section>
+
+      <section class="panel">
+        <div class="section-title"><div>
+          <h2>Acesso permanente</h2>
+          <p>Para computadores configurados para acesso sem supervisão, use ID fixo e senha.</p>
+        </div></div>
+        <button id="permanentBtn" class="secondary-btn full" type="button">Conectar por ID permanente</button>
       </section>
     </section>
 
@@ -71,7 +79,7 @@
         <div class="section-title">
           <div>
             <h2>Conectar por código</h2>
-            <p>Peça à pessoa o código de 6 dígitos e a senha temporária.</p>
+            <p>Peça à pessoa somente o código temporário de 6 dígitos exibido no Agent.</p>
           </div>
         </div>
 
@@ -81,12 +89,26 @@
                  maxlength="7" placeholder="000 000" aria-describedby="codeHelp">
           <small id="codeHelp">Use somente os 6 números exibidos no agente remoto.</small>
 
-          <label for="sessionPassword">Senha temporária</label>
-          <input id="sessionPassword" name="sessionPassword" inputmode="numeric" autocomplete="off"
-                 maxlength="8" placeholder="••••">
-
           <div id="formError" class="form-error" role="alert" hidden></div>
 
+          <button class="primary-btn full" type="submit">Conectar</button>
+        </form>
+      </section>
+    </section>
+
+    <section id="permanentView" class="view">
+      <button class="back-btn" data-back type="button">← Voltar</button>
+      <section class="panel">
+        <div class="section-title"><div>
+          <h2>Acesso permanente</h2>
+          <p>Informe o ID fixo de 9 dígitos e a senha definida no Agent.</p>
+        </div></div>
+        <form id="permanentForm" novalidate>
+          <label for="permanentId">ID do computador</label>
+          <input id="permanentId" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="000 000 000">
+          <label for="permanentPassword">Senha</label>
+          <input id="permanentPassword" type="password" autocomplete="current-password" maxlength="128" placeholder="Sua senha permanente">
+          <div id="permanentError" class="form-error" role="alert" hidden></div>
           <button class="primary-btn full" type="submit">Conectar</button>
         </form>
       </section>
@@ -162,7 +184,7 @@
 
     <footer class="footer footer-centered">
       <button id="aboutLink" class="footer-about-link" type="button" aria-haspopup="dialog" aria-controls="aboutModal">
-        © Remote Link - v0.5.3
+        © Remote Link - v0.6.0
       </button>
     </footer>
   </main>
@@ -173,7 +195,7 @@
       <h2 id="aboutModalTitle">Remote Link</h2>
       <p><strong>Desenvolvido por:</strong> Mizael Nunes.</p>
       <p><strong>Email:</strong> <a href="mailto:mizaelnunes001@hotmail.com">mizaelnunes001@hotmail.com</a></p>
-      <small>Remote Link • v0.5.3</small>
+      <small>Remote Link • v0.6.0</small>
     </section>
   </div>
 

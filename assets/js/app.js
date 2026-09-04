@@ -7,10 +7,14 @@ const installBtn = document.getElementById('installBtn');
 const trustedList = document.getElementById('trustedList');
 const supportForm = document.getElementById('supportForm');
 const codeInput = document.getElementById('sessionCode');
-const passwordInput = document.getElementById('sessionPassword');
 const formError = document.getElementById('formError');
 const connectingText = document.getElementById('connectingText');
 const connectSubmitBtn = supportForm.querySelector('button[type="submit"]');
+const permanentForm = document.getElementById('permanentForm');
+const permanentIdInput = document.getElementById('permanentId');
+const permanentPasswordInput = document.getElementById('permanentPassword');
+const permanentError = document.getElementById('permanentError');
+const permanentSubmitBtn = permanentForm?.querySelector('button[type="submit"]');
 const remoteStage = document.getElementById('remoteStage');
 const remoteVideo = document.getElementById('remoteVideo');
 const remoteMediaStatus = document.getElementById('remoteMediaStatus');
@@ -243,7 +247,13 @@ function friendlyError(error) {
   const code = error?.data?.error || error?.message;
   switch (code) {
     case 'AUTH_FAILED':
-      return 'Código ou senha temporária inválidos.';
+      return 'Credenciais inválidas.';
+    case 'PERMANENT_NOT_AVAILABLE':
+      return 'Este computador não está disponível para acesso permanente.';
+    case 'PERMANENT_OFFLINE':
+      return 'O Agent deste computador está offline ou em modo supervisionado.';
+    case 'TOO_MANY_ATTEMPTS':
+      return 'Muitas tentativas incorretas. Aguarde um minuto e tente novamente.';
     case 'SESSION_NOT_FOUND':
       return 'Sessão não encontrada. Confira o código exibido no computador.';
     case 'SESSION_EXPIRED':
@@ -251,7 +261,7 @@ function friendlyError(error) {
     case 'INVALID_CODE':
     case 'INVALID_PASSWORD':
     case 'INVALID_SESSION_DATA':
-      return 'Informe um código válido de 6 dígitos e a senha temporária.';
+      return 'Informe os dados de conexão corretamente.';
     default:
       return 'Não foi possível conectar ao Remote Link Server. Tente novamente.';
   }
@@ -769,134 +779,87 @@ async function startViewerWebRtc(code) {
   }
 }
 
-function applyAuthorizationState(code, status) {
+function formatSessionLabel(code, permanent = false) {
+  if (permanent) return `ID ${code.slice(0,3)} ${code.slice(3,6)} ${code.slice(6)} • autorizado`;
+  return `Código ${code.slice(0,3)} ${code.slice(3)} • autorizado`;
+}
+
+function applyAuthorizationState(code, status, permanent = false) {
   if (status.state === 'authorized' && status.authorized === true) {
-    document.getElementById('sessionLabel').textContent = `Código ${code.slice(0,3)} ${code.slice(3)} • autorizado`;
+    document.getElementById('sessionLabel').textContent = formatSessionLabel(code, permanent);
     showView('sessionView');
-    toast('Conexão autorizada.');
+    toast(permanent ? 'Acesso permanente autenticado.' : 'Conexão autorizada.');
     void startViewerWebRtc(code);
     return 'authorized';
   }
-
-  if (status.state === 'denied') {
+  if (!permanent && status.state === 'denied') {
     closeSessionSocket();
     showView('supportView');
     setFormError('A pessoa no computador negou a solicitação de acesso.');
     return 'denied';
   }
-
-  if (status.state === 'expired' || status.state === 'closed') {
+  if (status.state === 'expired' || status.state === 'closed' || status.state === 'disabled') {
     closeSessionSocket();
-    showView('supportView');
-    setFormError(status.state === 'closed'
-      ? 'A sessão foi encerrada no computador remoto.'
-      : 'O código expirou. Peça à pessoa para gerar um novo código.');
+    showView(permanent ? 'permanentView' : 'supportView');
+    const msg = permanent ? 'O acesso permanente não está disponível.' : (status.state === 'closed' ? 'A sessão foi encerrada no computador remoto.' : 'O código expirou. Peça um novo código.');
+    if (permanent) setPermanentError(msg); else setFormError(msg);
     return status.state;
   }
-
-  connectingText.textContent = 'Solicitação enviada. Aguardando a pessoa clicar em PERMITIR no computador.';
+  if (!permanent) connectingText.textContent = 'Solicitação enviada. Aguardando a pessoa clicar em PERMITIR no computador.';
   return null;
 }
 
-async function waitForAuthorization(code, viewerToken, attemptId) {
+async function waitForAuthorization(code, viewerToken, attemptId, { permanent = false } = {}) {
   viewerTokenInMemory = viewerToken;
-
   return new Promise((resolve) => {
     let finished = false;
     let fallbackBusy = false;
-
-    const finish = (state) => {
-      if (finished) return;
-      finished = true;
-      clearInterval(fallbackTimer);
-      resolve(state);
-    };
-
+    const finish = (state) => { if (finished) return; finished = true; clearInterval(fallbackTimer); resolve(state); };
     const processState = (status) => {
-      if (attemptId !== connectionAttempt) {
-        finish('cancelled');
-        return;
-      }
-      const terminal = applyAuthorizationState(code, status);
+      if (attemptId !== connectionAttempt) { finish('cancelled'); return; }
+      const terminal = applyAuthorizationState(code, status, permanent);
       if (terminal) finish(terminal);
     };
-
-    const wsUrl = `${WS_BASE}/api/sessions/${code}/ws?role=viewer&token=${encodeURIComponent(viewerToken)}`;
-    const ws = new WebSocket(wsUrl);
+    const base = permanent ? `/api/permanent/${code}` : `/api/sessions/${code}`;
+    const ws = new WebSocket(`${WS_BASE}${base}/ws?role=viewer&token=${encodeURIComponent(viewerToken)}`);
     sessionSocket = ws;
-
     ws.addEventListener('open', () => {
-      if (attemptId !== connectionAttempt) {
-        try { ws.close(); } catch { }
-        return;
-      }
-      connectingText.textContent = 'Canal em tempo real conectado. Aguardando autorização no computador.';
+      if (attemptId !== connectionAttempt) { try { ws.close(); } catch { } return; }
+      connectingText.textContent = permanent ? 'Canal seguro conectado. Iniciando acesso permanente...' : 'Canal em tempo real conectado. Aguardando autorização no computador.';
       diagEvent('WebSocket viewer conectado.');
     });
-
     ws.addEventListener('message', (event) => {
       if (attemptId !== connectionAttempt) return;
       try {
         const message = JSON.parse(event.data);
-        if (message?.type === 'session-state') {
-          processState(message);
-        } else if (message?.type === 'signal') {
-          diagEvent(`Sinal recebido via Cloudflare: ${message.kind || 'desconhecido'}.`);
-          void handleViewerSignal(message);
-        } else if (message?.type === 'signal-ack') {
-          setDiag(diagRelay, `${message.kind || 'sinal'} encaminhado`);
-          diagEvent(`ACK do relay Cloudflare: ${message.kind || 'sinal'}.`);
-        }
+        if (message?.type === 'session-state') processState(message);
+        else if (message?.type === 'signal') { diagEvent(`Sinal recebido via Cloudflare: ${message.kind || 'desconhecido'}.`); void handleViewerSignal(message); }
+        else if (message?.type === 'signal-ack') { setDiag(diagRelay, `${message.kind || 'sinal'} encaminhado`); diagEvent(`ACK do relay Cloudflare: ${message.kind || 'sinal'}.`); }
       } catch { }
     });
-
-    ws.addEventListener('close', () => {
-      if (!finished && attemptId === connectionAttempt) {
-        connectingText.textContent = 'Canal em tempo real indisponível. Usando verificação de fallback...';
-      }
-    });
-
-    ws.addEventListener('error', () => {
-      if (!finished && attemptId === connectionAttempt) {
-        connectingText.textContent = 'Falha no canal em tempo real. Usando verificação de fallback...';
-      }
-    });
-
+    ws.addEventListener('close', () => { if (!finished && attemptId === connectionAttempt) connectingText.textContent = 'Canal em tempo real indisponível. Usando verificação de fallback...'; });
+    ws.addEventListener('error', () => { if (!finished && attemptId === connectionAttempt) connectingText.textContent = 'Falha no canal em tempo real. Usando verificação de fallback...'; });
     const fallbackTimer = window.setInterval(async () => {
       if (finished || fallbackBusy || attemptId !== connectionAttempt) return;
       fallbackBusy = true;
       try {
-        const status = await api(`/api/sessions/${code}/status`, { method: 'GET' });
-        processState(status);
-      } catch {
-        // O WebSocket continua sendo o caminho principal.
-      } finally {
-        fallbackBusy = false;
-      }
+        const statusPath = permanent ? `/api/permanent/${code}/status` : `/api/sessions/${code}/status`;
+        processState(await api(statusPath, { method: 'GET' }));
+      } catch { }
+      finally { fallbackBusy = false; }
     }, FALLBACK_POLL_INTERVAL_MS);
   });
 }
 
-async function requestTemporaryAccess(code, password) {
+async function requestTemporaryAccess(code) {
   const attemptId = ++connectionAttempt;
   setFormError('');
   showView('connectingView');
-  connectingText.textContent = 'Validando código e senha temporária...';
-
+  connectingText.textContent = 'Localizando o código temporário...';
   try {
-    const result = await api('/api/sessions/request-access', {
-      method: 'POST',
-      body: JSON.stringify({ code, password }),
-    });
-
+    const result = await api('/api/sessions/request-access', { method: 'POST', body: JSON.stringify({ code }) });
     if (attemptId !== connectionAttempt) return;
-
-    if (result.state !== 'requested' || !result.viewerToken) {
-      throw new Error('UNEXPECTED_SESSION_STATE');
-    }
-
-    // A senha não é persistida nem reutilizada depois da validação.
-    passwordInput.value = '';
+    if (result.state !== 'requested' || !result.viewerToken) throw new Error('UNEXPECTED_SESSION_STATE');
     connectingText.textContent = 'Solicitação enviada. Aguardando a pessoa clicar em PERMITIR no computador.';
     await waitForAuthorization(code, result.viewerToken, attemptId);
   } catch (error) {
@@ -906,11 +869,36 @@ async function requestTemporaryAccess(code, password) {
   }
 }
 
+function setPermanentError(message = '') {
+  if (!permanentError) return;
+  permanentError.textContent = message;
+  permanentError.hidden = !message;
+}
+
+async function requestPermanentAccess(id, password) {
+  const attemptId = ++connectionAttempt;
+  setPermanentError('');
+  showView('connectingView');
+  connectingText.textContent = 'Autenticando acesso permanente...';
+  try {
+    const result = await api('/api/permanent/connect', { method: 'POST', body: JSON.stringify({ id, password }) });
+    if (attemptId !== connectionAttempt) return;
+    if (result.state !== 'authorized' || !result.viewerToken) throw new Error('UNEXPECTED_SESSION_STATE');
+    if (permanentPasswordInput) permanentPasswordInput.value = '';
+    await waitForAuthorization(id, result.viewerToken, attemptId, { permanent: true });
+  } catch (error) {
+    if (attemptId !== connectionAttempt) return;
+    showView('permanentView');
+    setPermanentError(friendlyError(error));
+  }
+}
+
 document.getElementById('supportBtn').addEventListener('click', () => {
   setFormError('');
   showView('supportView');
 });
 
+document.getElementById('permanentBtn')?.addEventListener('click', () => { setPermanentError(''); showView('permanentView'); });
 document.getElementById('pairBtn').addEventListener('click', () => showView('pairView'));
 
 document.querySelectorAll('[data-back]').forEach(btn => btn.addEventListener('click', () => {
@@ -921,8 +909,8 @@ document.querySelectorAll('[data-back]').forEach(btn => btn.addEventListener('cl
 
 document.getElementById('cancelConnectBtn').addEventListener('click', () => {
   cancelCurrentAttempt();
-  showView('supportView');
-  setFormError('Solicitação cancelada neste dispositivo.');
+  showView('homeView');
+  toast('Solicitação cancelada neste dispositivo.');
 });
 
 document.getElementById('endSessionBtn').addEventListener('click', () => {
@@ -937,27 +925,27 @@ document.getElementById('endSessionBtn').addEventListener('click', () => {
   toast('Sessão encerrada neste dispositivo.');
 });
 
-codeInput.addEventListener('input', () => {
-  codeInput.value = formatCode(codeInput.value);
+codeInput.addEventListener('input', () => { codeInput.value = formatCode(codeInput.value); });
+permanentIdInput?.addEventListener('input', () => {
+  const d = permanentIdInput.value.replace(/\D/g, '').slice(0,9);
+  permanentIdInput.value = d.length > 6 ? `${d.slice(0,3)} ${d.slice(3,6)} ${d.slice(6)}` : (d.length > 3 ? `${d.slice(0,3)} ${d.slice(3)}` : d);
 });
 
 supportForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-
   const code = normalizeCode(codeInput.value);
-  const password = passwordInput.value.trim();
-
-  if (code.length !== 6 || !/^\d{4,8}$/.test(password)) {
-    setFormError('Informe um código válido de 6 dígitos e uma senha temporária de 4 a 8 dígitos.');
-    return;
-  }
-
+  if (code.length !== 6) { setFormError('Informe um código válido de 6 dígitos.'); return; }
   connectSubmitBtn.disabled = true;
-  try {
-    await requestTemporaryAccess(code, password);
-  } finally {
-    connectSubmitBtn.disabled = false;
-  }
+  try { await requestTemporaryAccess(code); } finally { connectSubmitBtn.disabled = false; }
+});
+
+permanentForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = String(permanentIdInput?.value || '').replace(/\D/g, '').slice(0,9);
+  const password = permanentPasswordInput?.value || '';
+  if (!/^\d{9}$/.test(id) || password.length < 8) { setPermanentError('Informe o ID de 9 dígitos e a senha permanente.'); return; }
+  if (permanentSubmitBtn) permanentSubmitBtn.disabled = true;
+  try { await requestPermanentAccess(id, password); } finally { if (permanentSubmitBtn) permanentSubmitBtn.disabled = false; }
 });
 
 document.getElementById('simulatePairBtn').addEventListener('click', () => {
@@ -1353,7 +1341,7 @@ fullscreenBtn?.addEventListener('click', async () => {
 renderTrustedDevices();
 
 
-// Rodapé / modal Sobre — v0.5.3
+// Rodapé / modal Sobre — v0.6.0
 const aboutLink = document.getElementById('aboutLink');
 const aboutModal = document.getElementById('aboutModal');
 const aboutModalClose = document.getElementById('aboutModalClose');
