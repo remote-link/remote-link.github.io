@@ -328,42 +328,58 @@ function sendSignal(kind, data = null) {
   }
 }
 
-function setMouseControlEnabled(enabled, { quiet = false } = {}) {
-  mouseControlEnabled = Boolean(enabled && viewerControlChannel?.readyState === 'open');
-  if (mouseControlEnabled && touchControlEnabled) setTouchControlEnabled(false, { quiet: true });
+function syncPointerModeButtons() {
+  const available = viewerControlChannel?.readyState === 'open';
+
   remoteStage?.classList.toggle('mouse-control-active', mouseControlEnabled);
+  remoteStage?.classList.toggle('touch-control-active', touchControlEnabled);
+
   mouseControlBtn?.classList.toggle('active', mouseControlEnabled);
   mouseControlBtn?.setAttribute('aria-pressed', mouseControlEnabled ? 'true' : 'false');
-
   if (mouseControlBtn) {
-    const available = viewerControlChannel?.readyState === 'open';
     mouseControlBtn.disabled = !available;
     mouseControlBtn.title = available
       ? (mouseControlEnabled ? 'Mouse — controle ativo' : 'Mouse — ativar controle')
       : 'Mouse — aguardando canal de controle';
   }
 
-  if (!quiet && mouseControlEnabled) toast('Controle do mouse ativado. Toque para clicar, segure para clique direito.');
-  if (!quiet && !mouseControlEnabled && viewerControlChannel?.readyState === 'open') toast('Controle do mouse pausado.');
-}
-
-function setTouchControlEnabled(enabled, { quiet = false } = {}) {
-  touchControlEnabled = Boolean(enabled && viewerControlChannel?.readyState === 'open');
-  if (touchControlEnabled && mouseControlEnabled) setMouseControlEnabled(false, { quiet: true });
-  remoteStage?.classList.toggle('touch-control-active', touchControlEnabled);
   touchControlBtn?.classList.toggle('active', touchControlEnabled);
   touchControlBtn?.setAttribute('aria-pressed', touchControlEnabled ? 'true' : 'false');
-
   if (touchControlBtn) {
-    const available = viewerControlChannel?.readyState === 'open';
     touchControlBtn.disabled = !available;
     touchControlBtn.title = available
       ? (touchControlEnabled ? 'Touch — controle ativo' : 'Touch — ativar toque direto')
       : 'Touch — aguardando canal de controle';
   }
+}
+
+function setMouseControlEnabled(enabled, { quiet = false } = {}) {
+  const available = viewerControlChannel?.readyState === 'open';
+  const next = Boolean(enabled && available);
+
+  // Mouse e Touch sao modos mutuamente exclusivos, mas os botoes permanecem
+  // disponiveis durante toda a sessao. Evitamos chamadas recursivas entre os
+  // setters, que podiam deixar um dos controles desabilitado ate reconectar.
+  mouseControlEnabled = next;
+  if (next) touchControlEnabled = false;
+  resetPointerGesture();
+  syncPointerModeButtons();
+
+  if (!quiet && mouseControlEnabled) toast('Controle do mouse ativado. Toque para clicar, segure para clique direito.');
+  if (!quiet && !mouseControlEnabled && available) toast('Controle do mouse pausado.');
+}
+
+function setTouchControlEnabled(enabled, { quiet = false } = {}) {
+  const available = viewerControlChannel?.readyState === 'open';
+  const next = Boolean(enabled && available);
+
+  touchControlEnabled = next;
+  if (next) mouseControlEnabled = false;
+  resetPointerGesture();
+  syncPointerModeButtons();
 
   if (!quiet && touchControlEnabled) toast('Toque direto ativado. Toque exatamente onde deseja clicar; nas bordas, o alvo é ajustado automaticamente.');
-  if (!quiet && !touchControlEnabled && viewerControlChannel?.readyState === 'open') toast('Touchscreen remoto pausado.');
+  if (!quiet && !touchControlEnabled && available) toast('Touchscreen remoto pausado.');
 }
 
 function setKeyboardControlEnabled(enabled, { quiet = false } = {}) {
@@ -610,12 +626,14 @@ function stopViewerWebRtc({ notifyAgent = false } = {}) {
   if (notifyAgent && viewerPeer) sendSignal('bye', { reason: 'viewer-ended' });
 
   setMouseControlEnabled(false, { quiet: true });
+  setTouchControlEnabled(false, { quiet: true });
   setKeyboardControlEnabled(false, { quiet: true });
   closeKeyboardModal();
   if (viewerControlChannel) {
     try { viewerControlChannel.close(); } catch { }
   }
   viewerControlChannel = null;
+  syncPointerModeButtons();
   remoteMonitors = [];
   selectedRemoteMonitorIndex = 0;
   if (screensControlBtn) screensControlBtn.disabled = true;
