@@ -1,4 +1,4 @@
-# Remote Link Web — v0.6.2
+# Remote Link Web — v0.6.4
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -12,6 +12,15 @@ Informe o ID fixo de 9 dígitos e a senha definida no Agent. O acesso é iniciad
 
 A senha permanente fica somente em memória durante a tentativa e não é persistida pela PWA. Vídeo, mouse, teclado, seleção de monitores, tela cheia e proteção contra pull-to-refresh permanecem disponíveis.
 
+
+## v0.6.4 — proporção da tela e toque direto
+
+- Ajusta a área de vídeo à proporção do monitor selecionado.
+- Remove o excesso de área preta vertical durante a sessão.
+- Mantém o canvas WebRTC fixo, mas apresenta a tela sem deformação visual.
+- No modo toque, mapeia o dedo diretamente para a coordenada absoluta da tela remota.
+- Clampeia toques próximos às bordas para permitir atingir minimizar/maximizar/fechar em telas pequenas.
+- Preserva mouse, teclado, múltiplos monitores e proteção contra pull-to-refresh.
 
 ## v0.6.2 — correções
 

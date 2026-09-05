@@ -362,7 +362,7 @@ function setTouchControlEnabled(enabled, { quiet = false } = {}) {
       : 'Touch — aguardando canal de controle';
   }
 
-  if (!quiet && touchControlEnabled) toast('Touchscreen remoto ativado. Toque e arraste diretamente na tela do computador.');
+  if (!quiet && touchControlEnabled) toast('Toque direto ativado. Toque exatamente onde deseja clicar; nas bordas, o alvo é ajustado automaticamente.');
   if (!quiet && !touchControlEnabled && viewerControlChannel?.readyState === 'open') toast('Touchscreen remoto pausado.');
 }
 
@@ -452,6 +452,7 @@ function handleControlChannelMessage(message) {
   if (message.type === 'screen-selected' && Number.isInteger(message.index)) {
     selectedRemoteMonitorIndex = message.index;
     renderRemoteMonitors();
+    applyRemoteStageAspect();
     toast(`Tela ${message.index + 1} selecionada.`);
   }
 }
@@ -516,7 +517,17 @@ function closeScreensModal() {
   document.body.style.overflow = '';
 }
 
-function getRemotePoint(clientX, clientY) {
+function applyRemoteStageAspect() {
+  if (!remoteStage) return;
+  const monitor = remoteMonitors.find(item => item.index === selectedRemoteMonitorIndex);
+  if (monitor?.width > 0 && monitor?.height > 0) {
+    remoteStage.style.aspectRatio = `${monitor.width} / ${monitor.height}`;
+  } else {
+    remoteStage.style.aspectRatio = '16 / 9';
+  }
+}
+
+function getRemotePoint(clientX, clientY, { clampToScreen = false } = {}) {
   if (!remoteVideo || !remoteVideo.videoWidth || !remoteVideo.videoHeight) return null;
   const rect = remoteVideo.getBoundingClientRect();
   if (!rect.width || !rect.height) return null;
@@ -539,9 +550,14 @@ function getRemotePoint(clientX, clientY) {
 
   let encodedX = (clientX - rect.left - offsetX) / contentWidth;
   let encodedY = (clientY - rect.top - offsetY) / contentHeight;
-  if (encodedX < 0 || encodedX > 1 || encodedY < 0 || encodedY > 1) return null;
+  if (clampToScreen) {
+    encodedX = Math.max(0, Math.min(1, encodedX));
+    encodedY = Math.max(0, Math.min(1, encodedY));
+  } else if (encodedX < 0 || encodedX > 1 || encodedY < 0 || encodedY > 1) {
+    return null;
+  }
 
-  // O Agent v0.6.2 usa canvas VP8 fixo 16:9. Se o monitor tiver outra
+  // O Agent v0.6.4 usa canvas VP8 fixo 16:9. Se o monitor tiver outra
   // proporcao, a imagem real fica centralizada dentro desse canvas. Removemos
   // essas barras internas antes de converter a coordenada para o monitor.
   const monitor = remoteMonitors.find(item => item.index === selectedRemoteMonitorIndex);
@@ -557,7 +573,12 @@ function getRemotePoint(clientX, clientY) {
     }
     encodedX = (encodedX - innerX) / innerW;
     encodedY = (encodedY - innerY) / innerH;
-    if (encodedX < 0 || encodedX > 1 || encodedY < 0 || encodedY > 1) return null;
+    if (clampToScreen) {
+      encodedX = Math.max(0, Math.min(1, encodedX));
+      encodedY = Math.max(0, Math.min(1, encodedY));
+    } else if (encodedX < 0 || encodedX > 1 || encodedY < 0 || encodedY > 1) {
+      return null;
+    }
   }
 
   return { x: encodedX, y: encodedY };
@@ -1322,10 +1343,11 @@ remoteStage?.addEventListener('touchstart', (event) => {
   if (!touchControlEnabled || !remoteStage.classList.contains('media-active')) return;
   if (event.touches.length !== 1) return;
   const touch = event.touches[0];
-  const point = getRemotePoint(touch.clientX, touch.clientY);
+  const point = getRemotePoint(touch.clientX, touch.clientY, { clampToScreen: true });
   if (!point) return;
-  pointerGesture = { pointerId: 'native-touch', pointerType: 'native-touch', lastX: touch.clientX, lastY: touch.clientY };
-  sendControlRaw({ type: 'touch', action: 'down', x: point.x, y: point.y });
+  pointerGesture = { pointerId: 'native-touch', pointerType: 'native-touch', startX: touch.clientX, startY: touch.clientY, lastX: touch.clientX, lastY: touch.clientY, moved: false };
+  // Toque simples só é enviado no touchend. Isso evita depender da posição
+  // anterior do cursor e deixa o clique direto/absoluto.
   event.preventDefault();
 }, { passive: false });
 
@@ -1333,11 +1355,17 @@ remoteStage?.addEventListener('touchmove', (event) => {
   if (!touchControlEnabled || !pointerGesture || pointerGesture.pointerType !== 'native-touch') return;
   if (event.touches.length !== 1) return;
   const touch = event.touches[0];
-  const point = getRemotePoint(touch.clientX, touch.clientY);
+  const point = getRemotePoint(touch.clientX, touch.clientY, { clampToScreen: true });
   if (!point) return;
+  const distance = Math.hypot(touch.clientX - pointerGesture.startX, touch.clientY - pointerGesture.startY);
+  if (!pointerGesture.moved && distance > 8) {
+    pointerGesture.moved = true;
+    const startPoint = getRemotePoint(pointerGesture.startX, pointerGesture.startY, { clampToScreen: true });
+    if (startPoint) sendControlRaw({ type: 'touch', action: 'down', x: startPoint.x, y: startPoint.y });
+  }
   pointerGesture.lastX = touch.clientX;
   pointerGesture.lastY = touch.clientY;
-  sendControlRaw({ type: 'touch', action: 'move', x: point.x, y: point.y });
+  if (pointerGesture.moved) sendControlRaw({ type: 'touch', action: 'move', x: point.x, y: point.y });
   event.preventDefault();
 }, { passive: false });
 
@@ -1347,15 +1375,18 @@ remoteStage?.addEventListener('touchend', (event) => {
   const changed = event.changedTouches?.[0];
   const x = changed?.clientX ?? gesture.lastX;
   const y = changed?.clientY ?? gesture.lastY;
-  const point = getRemotePoint(x, y);
+  const point = getRemotePoint(x, y, { clampToScreen: true });
   resetPointerGesture();
-  if (point) sendControlRaw({ type: 'touch', action: 'up', x: point.x, y: point.y });
+  if (point) {
+    if (!gesture.moved) sendControlRaw({ type: 'touch', action: 'tap', x: point.x, y: point.y });
+    else sendControlRaw({ type: 'touch', action: 'up', x: point.x, y: point.y });
+  }
   event.preventDefault();
 }, { passive: false });
 
 remoteStage?.addEventListener('touchcancel', () => {
   if (touchControlEnabled && pointerGesture?.pointerType === 'native-touch') {
-    const point = getRemotePoint(pointerGesture.lastX, pointerGesture.lastY);
+    const point = getRemotePoint(pointerGesture.lastX, pointerGesture.lastY, { clampToScreen: true });
     if (point) sendControlRaw({ type: 'touch', action: 'up', x: point.x, y: point.y });
     resetPointerGesture();
   }
@@ -1473,7 +1504,7 @@ fullscreenBtn?.addEventListener('click', async () => {
 renderTrustedDevices();
 
 
-// Rodapé / modal Sobre — v0.6.2
+// Rodapé / modal Sobre — v0.6.4
 const aboutLink = document.getElementById('aboutLink');
 const aboutModal = document.getElementById('aboutModal');
 const aboutModalClose = document.getElementById('aboutModalClose');

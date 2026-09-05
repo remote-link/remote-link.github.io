@@ -32,13 +32,18 @@ body.remote-session-guard{
 .webrtc-diagnostics{margin:18px auto 0;width:min(100%,440px);text-align:left;border:1px solid rgba(145,160,183,.18);border-radius:14px;background:rgba(8,19,33,.82);padding:10px 12px;color:#b7c5d8}.webrtc-diagnostics summary{cursor:pointer;font-weight:700;color:#dce7f6}.webrtc-diagnostic-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;margin-top:10px;font-size:.78rem}.webrtc-diagnostic-grid span{color:#91a0b7}.webrtc-diagnostic-grid strong{color:#dce7f6;font-weight:650;text-align:right;max-width:160px;overflow-wrap:anywhere}.webrtc-diagnostics>small{display:block;margin-top:10px;padding-top:9px;border-top:1px solid rgba(145,160,183,.12);color:#7fa2c7;line-height:1.4}.remote-stage.media-active .webrtc-diagnostics{display:none}
 
 
-/* Controle remoto via WebRTC DataChannel — v0.6.2 */
+/* Controle remoto via WebRTC DataChannel — v0.6.4 */
 .control-bar #mouseControlBtn.active{background:#173d69;border-color:#4f8ff7;box-shadow:0 0 0 2px rgba(79,143,247,.18) inset}
 .remote-stage.mouse-control-active{touch-action:none;-webkit-user-select:none;user-select:none;cursor:crosshair}
 .remote-stage.mouse-control-active .remote-video{pointer-events:none}
 
-/* Remote Link v0.6.2 — selecao de monitores e teclado */
+/* Remote Link v0.6.4 — selecao de monitores e teclado */
 .screens-help{color:#91a0b7;line-height:1.45;margin:0 0 14px}.screens-list{display:grid;gap:10px}.screen-option{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;padding:13px 14px;border-radius:14px;background:#0a1627;color:#e8eef8;border:1px solid rgba(145,160,183,.18)}.screen-option strong,.screen-option small{display:block}.screen-option small{color:#91a0b7;margin-top:3px}.screen-option.active{border-color:#4f8ff7;background:#10284a;box-shadow:0 0 0 2px rgba(79,143,247,.16) inset}.screen-badge{font-size:.72rem;padding:4px 7px;border-radius:999px;background:#173d69;color:#cfe3ff;white-space:nowrap}.control-bar #screensControlBtn.active{background:#173d69;border-color:#4f8ff7}.remote-stage.mouse-control-active{overscroll-behavior:none}
 .control-bar #keyboardControlBtn.active{background:#173d69;border-color:#4f8ff7;box-shadow:0 0 0 2px rgba(79,143,247,.18) inset}.keyboard-help{color:#91a0b7;line-height:1.45;margin:0 0 12px}.remote-keyboard-input{width:100%;resize:none;min-height:88px;border:1px solid rgba(145,160,183,.24);border-radius:14px;background:#081321;color:#edf4ff;padding:13px 14px;outline:none;font:inherit}.remote-keyboard-input:focus{border-color:#4f8ff7;box-shadow:0 0 0 3px rgba(79,143,247,.15)}.keyboard-quick-keys{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}.keyboard-quick-keys button{min-height:42px;border:1px solid rgba(145,160,183,.2);border-radius:11px;background:#101f34;color:#dce7f6;font-weight:700}.keyboard-quick-keys button:active{background:#173d69}.keyboard-modal small{line-height:1.45}@media(max-width:420px){.keyboard-quick-keys{grid-template-columns:repeat(3,1fr)}}
 
 .control-bar #touchControlBtn.active{background:#173d69;border-color:#4f8ff7;box-shadow:0 0 0 2px rgba(79,143,247,.18) inset}.remote-stage.touch-control-active{touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;cursor:crosshair}.remote-stage.touch-control-active .remote-video{pointer-events:none}
+
+/* v0.6.4 — video proporcional e toque direto */
+.remote-stage.media-active{flex:none;min-height:0;aspect-ratio:16/9;align-self:stretch}
+.remote-stage.media-active .remote-video{width:100%;height:100%;min-height:0;object-fit:contain}
+@media(max-width:480px){.remote-stage.media-active{min-height:0}}
