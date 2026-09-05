@@ -1,4 +1,4 @@
-# Remote Link Web — v0.8.1
+# Remote Link Web — v0.8.2
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -74,7 +74,7 @@ A senha permanente fica somente em memória durante a tentativa e não é persis
 - Nenhum upload acontece automaticamente.
 
 
-## v0.8.1 — arquivo do PC para este dispositivo
+## v0.8.2 — arquivo do PC para este dispositivo
 
 - completa a transferencia manual de arquivos nos dois sentidos;
 - adiciona `Escolher arquivo no PC`;
@@ -83,3 +83,8 @@ A senha permanente fica somente em memória durante a tentativa e não é persis
 - apos a recepcao, o usuario toca em `Baixar neste dispositivo`;
 - limite inicial de 10 MB por arquivo;
 - nenhum arquivo passa pelo Cloudflare Worker.
+
+
+## v0.8.2
+- Fecha o painel de arquivos enquanto o seletor do Windows esta aberto, deixando a tela remota livre para operacao.
+- Reabre o painel quando a transferencia inicia ou a selecao e cancelada.

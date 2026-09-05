@@ -627,7 +627,7 @@ function openFileModal() {
 }
 
 function closeFileModal() {
-  if (!fileModal || activeFileTransfer || activePcFileTransfer || pcFileRequestPending) return;
+  if (!fileModal || activeFileTransfer || activePcFileTransfer) return;
   fileModal.hidden = true;
   document.body.style.overflow = '';
 }
@@ -783,7 +783,14 @@ function requestFileFromPc() {
     pcFileRequestPending = false;
     if (fileRequestPcBtn) fileRequestPcBtn.disabled = false;
     if (pcFileProgressText) pcFileProgressText.textContent = 'Não foi possível solicitar o arquivo.';
+    return;
   }
+
+  // Do not cover the remote desktop while the native Windows picker is open.
+  // The session remains fully controllable; the panel returns when transfer starts.
+  if (fileModal) fileModal.hidden = true;
+  document.body.style.overflow = '';
+  toast('Seletor aberto no PC remoto. Escolha o arquivo pela tela remota.');
 }
 
 function updatePcFileProgress(received, total, label = 'Recebendo') {
@@ -796,6 +803,8 @@ function handlePcFileMessage(message) {
   const action = String(message.action || '');
   if (action === 'pc-status') {
     pcFileRequestPending = false;
+    if (fileModal) fileModal.hidden = false;
+    document.body.style.overflow = 'hidden';
     if (message.cancelled) {
       if (pcFileProgressText) pcFileProgressText.textContent = String(message.message || 'Seleção cancelada no PC.');
     } else if (!message.ok) {
@@ -808,6 +817,8 @@ function handlePcFileMessage(message) {
 
   if (action === 'pc-start') {
     pcFileRequestPending = false;
+    if (fileModal) fileModal.hidden = false;
+    document.body.style.overflow = 'hidden';
     const size = Number(message.size || 0);
     const id = String(message.id || '');
     const name = String(message.name || 'arquivo');
