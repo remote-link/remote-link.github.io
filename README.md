@@ -1,4 +1,4 @@
-# Remote Link Web — v0.6.0
+# Remote Link Web — v0.6.1
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -11,3 +11,10 @@ Informe apenas o código temporário de 6 dígitos. O computador remoto exibirá
 Informe o ID fixo de 9 dígitos e a senha definida no Agent. O acesso é iniciado sem confirmação local quando o Agent estiver online no modo permanente.
 
 A senha permanente fica somente em memória durante a tentativa e não é persistida pela PWA. Vídeo, mouse, teclado, seleção de monitores, tela cheia e proteção contra pull-to-refresh permanecem disponíveis.
+
+
+## v0.6.1 — correções
+
+- acesso supervisionado continua usando somente código temporário;
+- acesso permanente busca um desafio do servidor e deriva o verificador da senha no navegador via PBKDF2-SHA256;
+- a senha digitada não é enviada ao Worker em texto.

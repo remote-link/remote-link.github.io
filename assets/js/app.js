@@ -875,13 +875,45 @@ function setPermanentError(message = '') {
   permanentError.hidden = !message;
 }
 
+function hexToBytes(hex) {
+  const clean = String(hex || '').toLowerCase();
+  if (!/^[a-f0-9]+$/.test(clean) || clean.length % 2 !== 0) throw new Error('INVALID_PERMANENT_CHALLENGE');
+  return new Uint8Array(clean.match(/.{2}/g).map(b => parseInt(b, 16)));
+}
+
+function bytesToHex(bytes) {
+  return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function derivePermanentVerifier(password, saltHex, iterations = 150000) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits({
+    name: 'PBKDF2',
+    hash: 'SHA-256',
+    salt: hexToBytes(saltHex),
+    iterations
+  }, key, 256);
+  return bytesToHex(bits);
+}
+
 async function requestPermanentAccess(id, password) {
   const attemptId = ++connectionAttempt;
   setPermanentError('');
   showView('connectingView');
   connectingText.textContent = 'Autenticando acesso permanente...';
   try {
-    const result = await api('/api/permanent/connect', { method: 'POST', body: JSON.stringify({ id, password }) });
+    const challenge = await api(`/api/permanent/${id}/challenge`);
+    const passwordVerifier = await derivePermanentVerifier(password, challenge.passwordSalt, challenge.iterations || 150000);
+    const result = await api('/api/permanent/connect', {
+      method: 'POST',
+      body: JSON.stringify({ id, passwordVerifier })
+    });
     if (attemptId !== connectionAttempt) return;
     if (result.state !== 'authorized' || !result.viewerToken) throw new Error('UNEXPECTED_SESSION_STATE');
     if (permanentPasswordInput) permanentPasswordInput.value = '';
@@ -1341,7 +1373,7 @@ fullscreenBtn?.addEventListener('click', async () => {
 renderTrustedDevices();
 
 
-// Rodapé / modal Sobre — v0.6.0
+// Rodapé / modal Sobre — v0.6.1
 const aboutLink = document.getElementById('aboutLink');
 const aboutModal = document.getElementById('aboutModal');
 const aboutModalClose = document.getElementById('aboutModalClose');
