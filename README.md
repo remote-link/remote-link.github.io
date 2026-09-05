@@ -1,4 +1,12 @@
-# Remote Link Web — v0.8.3
+# Remote Link Web — v0.9.0
+
+## Conexão automática por QR presencial
+
+A PWA reconhece links no formato `https://remote-link.github.io/#mode=qr&code=...&token=...`, remove imediatamente o token da barra de endereço/histórico e solicita a autorização QR ao Worker. Quando o token é válido, não existe etapa NEGAR/PERMITIR e a sessão WebRTC começa diretamente.
+
+O fluxo por código permanece supervisionado e o fluxo permanente continua usando ID + senha. QR expirado, inválido ou já consumido é rejeitado.
+
+---
 
 PWA do Remote Link hospedada no GitHub Pages.
 

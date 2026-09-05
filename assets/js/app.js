@@ -294,6 +294,11 @@ function friendlyError(error) {
       return 'Sessão não encontrada. Confira o código exibido no computador.';
     case 'SESSION_EXPIRED':
       return 'O código expirou. Peça à pessoa para gerar um novo código.';
+    case 'QR_EXPIRED':
+      return 'Este QR Code expirou. Escaneie o QR atualizado exibido no computador.';
+    case 'QR_INVALID':
+    case 'INVALID_QR_TOKEN':
+      return 'QR Code inválido. Escaneie novamente o QR exibido no Agent.';
     case 'INVALID_CODE':
     case 'INVALID_PASSWORD':
     case 'INVALID_SESSION_DATA':
@@ -1358,6 +1363,44 @@ async function requestTemporaryAccess(code) {
   }
 }
 
+async function requestQrAccess(code, qrToken) {
+  const attemptId = ++connectionAttempt;
+  setFormError('');
+  showView('connectingView');
+  connectingText.textContent = 'Validando presença pelo QR Code...';
+  try {
+    const result = await api('/api/sessions/qr-connect', {
+      method: 'POST',
+      body: JSON.stringify({ code, qrToken })
+    });
+    if (attemptId !== connectionAttempt) return;
+    if (result.state !== 'authorized' || !result.viewerToken) throw new Error('UNEXPECTED_SESSION_STATE');
+    connectingText.textContent = 'QR validado. Iniciando sessão remota...';
+    await waitForAuthorization(code, result.viewerToken, attemptId);
+  } catch (error) {
+    if (attemptId !== connectionAttempt) return;
+    showView('homeView');
+    toast(friendlyError(error));
+  }
+}
+
+async function autoConnectFromQrUrl() {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  if (params.get('mode') !== 'qr') return;
+  const code = normalizeCode(params.get('code'));
+  const qrToken = String(params.get('token') || '').toLowerCase();
+
+  // Remove o token da barra/endereço e do histórico antes de iniciar a conexão.
+  history.replaceState({}, document.title, window.location.pathname);
+
+  if (!/^\d{6}$/.test(code) || !/^[a-f0-9]{64}$/.test(qrToken)) {
+    toast('QR Code inválido. Escaneie novamente o QR exibido no Agent.');
+    return;
+  }
+
+  await requestQrAccess(code, qrToken);
+}
+
 function setPermanentError(message = '') {
   if (!permanentError) return;
   permanentError.textContent = message;
@@ -1469,15 +1512,9 @@ permanentForm?.addEventListener('submit', async (e) => {
   try { await requestPermanentAccess(id, password); } finally { if (permanentSubmitBtn) permanentSubmitBtn.disabled = false; }
 });
 
-document.getElementById('simulatePairBtn').addEventListener('click', () => {
-  const devices = JSON.parse(localStorage.getItem('rl_trusted_devices') || '[]');
-  if (!devices.some(d => d.id === 'demo-pc')) {
-    devices.push({ id: 'demo-pc', name: 'Meu computador', lastSeen: 'Pareado para demonstração' });
-    localStorage.setItem('rl_trusted_devices', JSON.stringify(devices));
-  }
-  renderTrustedDevices();
+document.getElementById('simulatePairBtn')?.addEventListener('click', () => {
   showView('homeView');
-  toast('Pareamento simulado concluído.');
+  toast('Abra a câmera do celular e escaneie o QR exibido no Agent Windows.');
 });
 
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -1982,3 +2019,5 @@ document.addEventListener('keydown', (event) => {
 });
 
 window.addEventListener('beforeunload', clearPcFileDownload);
+
+void autoConnectFromQrUrl();
