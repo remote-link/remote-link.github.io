@@ -187,7 +187,7 @@
 
     <footer class="footer footer-centered">
       <button id="aboutLink" class="footer-about-link" type="button" aria-haspopup="dialog" aria-controls="aboutModal">
-        © Remote Link - v0.8.0
+        © Remote Link - v0.8.1
       </button>
     </footer>
   </main>
@@ -198,7 +198,7 @@
       <h2 id="aboutModalTitle">Remote Link</h2>
       <p><strong>Desenvolvido por:</strong> Mizael Nunes.</p>
       <p><strong>Email:</strong> <a href="mailto:mizaelnunes001@hotmail.com">mizaelnunes001@hotmail.com</a></p>
-      <small>Remote Link • v0.8.0</small>
+      <small>Remote Link • v0.8.1</small>
     </section>
   </div>
 
@@ -257,19 +257,41 @@
   <div id="fileModal" class="modal-backdrop" hidden>
     <section class="about-modal file-modal" role="dialog" aria-modal="true" aria-labelledby="fileModalTitle">
       <button id="fileModalClose" class="modal-close" type="button" aria-label="Fechar">×</button>
-      <h2 id="fileModalTitle">Enviar arquivo ao PC</h2>
-      <p class="file-help">Escolha um arquivo deste dispositivo. O envio é manual e direto pela sessão WebRTC.</p>
-      <input id="remoteFileInput" class="file-picker" type="file">
-      <div id="fileSelection" class="file-selection">Nenhum arquivo selecionado.</div>
-      <div class="file-progress" aria-live="polite">
-        <div class="file-progress-track"><div id="fileProgressBar" class="file-progress-bar"></div></div>
-        <small id="fileProgressText">Aguardando arquivo.</small>
+      <h2 id="fileModalTitle">Arquivos</h2>
+      <p class="file-help">Transferência manual nos dois sentidos, diretamente pela sessão WebRTC.</p>
+
+      <div class="file-section">
+        <h3>Este dispositivo → PC</h3>
+        <input id="remoteFileInput" class="file-picker" type="file">
+        <div id="fileSelection" class="file-selection">Nenhum arquivo selecionado.</div>
+        <div class="file-progress" aria-live="polite">
+          <div class="file-progress-track"><div id="fileProgressBar" class="file-progress-bar"></div></div>
+          <small id="fileProgressText">Aguardando arquivo.</small>
+        </div>
+        <div class="file-actions">
+          <button id="fileSendBtn" class="primary-btn" type="button" disabled>Enviar ao PC</button>
+          <button id="fileCancelBtn" class="secondary-btn" type="button" disabled>Cancelar</button>
+        </div>
+        <small>O arquivo será salvo em Downloads\Remote Link no computador remoto.</small>
       </div>
-      <div class="file-actions">
-        <button id="fileSendBtn" class="primary-btn" type="button" disabled>Enviar ao PC</button>
-        <button id="fileCancelBtn" class="secondary-btn" type="button" disabled>Cancelar</button>
+
+      <div class="file-divider" aria-hidden="true"></div>
+
+      <div class="file-section">
+        <h3>PC → este dispositivo</h3>
+        <p class="file-help">Abra o seletor de arquivos no PC remoto. Você poderá operá-lo pela própria sessão.</p>
+        <div class="file-actions file-actions-single">
+          <button id="fileRequestPcBtn" class="secondary-btn" type="button">Escolher arquivo no PC</button>
+        </div>
+        <div class="file-progress" aria-live="polite">
+          <div class="file-progress-track"><div id="pcFileProgressBar" class="file-progress-bar"></div></div>
+          <small id="pcFileProgressText">Nenhum arquivo solicitado.</small>
+        </div>
+        <div id="pcFileReceived" class="file-selection" hidden></div>
+        <a id="pcFileDownloadBtn" class="primary-btn file-download-btn" href="#" download hidden>Baixar neste dispositivo</a>
       </div>
-      <small>Limite inicial: 10 MB. O arquivo será salvo em Downloads\Remote Link no computador remoto.</small>
+
+      <small>Limite inicial: 10 MB por arquivo. Nenhuma transferência é automática.</small>
     </section>
   </div>
 

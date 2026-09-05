@@ -1,4 +1,4 @@
-# Remote Link Web — v0.8.0
+# Remote Link Web — v0.8.1
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -72,3 +72,14 @@ A senha permanente fica somente em memória durante a tentativa e não é persis
 - Transmissão em blocos pelo WebRTC DataChannel; não passa pelo Worker.
 - O PC salva em `Downloads\Remote Link`.
 - Nenhum upload acontece automaticamente.
+
+
+## v0.8.1 — arquivo do PC para este dispositivo
+
+- completa a transferencia manual de arquivos nos dois sentidos;
+- adiciona `Escolher arquivo no PC`;
+- o seletor nativo e aberto no computador remoto e pode ser operado pela sessao;
+- o arquivo escolhido e recebido pelo WebRTC DataChannel;
+- apos a recepcao, o usuario toca em `Baixar neste dispositivo`;
+- limite inicial de 10 MB por arquivo;
+- nenhum arquivo passa pelo Cloudflare Worker.

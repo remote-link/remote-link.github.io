@@ -39,6 +39,11 @@ const fileProgressBar = document.getElementById('fileProgressBar');
 const fileProgressText = document.getElementById('fileProgressText');
 const fileSendBtn = document.getElementById('fileSendBtn');
 const fileCancelBtn = document.getElementById('fileCancelBtn');
+const fileRequestPcBtn = document.getElementById('fileRequestPcBtn');
+const pcFileProgressBar = document.getElementById('pcFileProgressBar');
+const pcFileProgressText = document.getElementById('pcFileProgressText');
+const pcFileReceived = document.getElementById('pcFileReceived');
+const pcFileDownloadBtn = document.getElementById('pcFileDownloadBtn');
 const keyboardModal = document.getElementById('keyboardModal');
 const keyboardModalClose = document.getElementById('keyboardModalClose');
 const remoteKeyboardInput = document.getElementById('remoteKeyboardInput');
@@ -60,6 +65,9 @@ let deferredPrompt = null;
 const MAX_REMOTE_FILE_BYTES = 10 * 1024 * 1024;
 const FILE_CHUNK_BYTES = 16 * 1024;
 let activeFileTransfer = null;
+let activePcFileTransfer = null;
+let pcFileRequestPending = false;
+let pcFileObjectUrl = null;
 
 const INSTALL_NUDGE_VISIBLE_MS = 8000;
 const INSTALL_SWIPE_DISMISS_PX = 48;
@@ -619,7 +627,7 @@ function openFileModal() {
 }
 
 function closeFileModal() {
-  if (!fileModal || activeFileTransfer) return;
+  if (!fileModal || activeFileTransfer || activePcFileTransfer || pcFileRequestPending) return;
   fileModal.hidden = true;
   document.body.style.overflow = '';
 }
@@ -717,6 +725,7 @@ function finishFileTransfer(ok, message) {
 }
 
 function handleFileTransferMessage(message) {
+  if (handlePcFileMessage(message)) return;
   if (!activeFileTransfer || message.id !== activeFileTransfer.id) return;
   if (message.action === 'progress') {
     updateFileProgress(Number(message.received || 0), activeFileTransfer.file.size, 'Recebido pelo PC');
@@ -731,6 +740,139 @@ function handleFileTransferMessage(message) {
       finishFileTransfer(true, String(message.message || 'Arquivo enviado com sucesso.'));
     }
   }
+}
+
+function clearPcFileDownload() {
+  if (pcFileObjectUrl) {
+    try { URL.revokeObjectURL(pcFileObjectUrl); } catch { }
+    pcFileObjectUrl = null;
+  }
+  if (pcFileDownloadBtn) {
+    pcFileDownloadBtn.hidden = true;
+    pcFileDownloadBtn.removeAttribute('href');
+    pcFileDownloadBtn.removeAttribute('download');
+  }
+  if (pcFileReceived) {
+    pcFileReceived.hidden = true;
+    pcFileReceived.textContent = '';
+  }
+}
+
+function base64ToUint8Array(base64) {
+  const binary = atob(String(base64 || ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function requestFileFromPc() {
+  if (!viewerControlChannel || viewerControlChannel.readyState !== 'open') {
+    toast('Canal de arquivo indisponível.');
+    return;
+  }
+  if (activePcFileTransfer) {
+    toast('Aguarde a transferência atual.');
+    return;
+  }
+  clearPcFileDownload();
+  if (pcFileProgressBar) pcFileProgressBar.style.width = '0%';
+  if (pcFileProgressText) pcFileProgressText.textContent = 'Abrindo seletor no PC remoto...';
+  pcFileRequestPending = true;
+  if (fileRequestPcBtn) fileRequestPcBtn.disabled = true;
+  if (!sendControlRaw({ type: 'file', action: 'request-pc-file' })) {
+    pcFileRequestPending = false;
+    if (fileRequestPcBtn) fileRequestPcBtn.disabled = false;
+    if (pcFileProgressText) pcFileProgressText.textContent = 'Não foi possível solicitar o arquivo.';
+  }
+}
+
+function updatePcFileProgress(received, total, label = 'Recebendo') {
+  const percent = total > 0 ? Math.min(100, Math.round((received / total) * 100)) : 100;
+  if (pcFileProgressBar) pcFileProgressBar.style.width = `${percent}%`;
+  if (pcFileProgressText) pcFileProgressText.textContent = `${label}: ${percent}% • ${formatBytes(received)} de ${formatBytes(total)}`;
+}
+
+function handlePcFileMessage(message) {
+  const action = String(message.action || '');
+  if (action === 'pc-status') {
+    pcFileRequestPending = false;
+    if (message.cancelled) {
+      if (pcFileProgressText) pcFileProgressText.textContent = String(message.message || 'Seleção cancelada no PC.');
+    } else if (!message.ok) {
+      if (pcFileProgressText) pcFileProgressText.textContent = String(message.message || 'Falha ao receber arquivo do PC.');
+      toast(String(message.message || 'Falha ao receber arquivo do PC.'));
+    }
+    if (fileRequestPcBtn) fileRequestPcBtn.disabled = false;
+    return true;
+  }
+
+  if (action === 'pc-start') {
+    pcFileRequestPending = false;
+    const size = Number(message.size || 0);
+    const id = String(message.id || '');
+    const name = String(message.name || 'arquivo');
+    if (!id || size < 0 || size > MAX_REMOTE_FILE_BYTES) {
+      activePcFileTransfer = null;
+      if (fileRequestPcBtn) fileRequestPcBtn.disabled = false;
+      if (pcFileProgressText) pcFileProgressText.textContent = 'Arquivo recusado: tamanho inválido.';
+      return true;
+    }
+    clearPcFileDownload();
+    activePcFileTransfer = { id, name, size, chunks: [], received: 0 };
+    if (fileRequestPcBtn) fileRequestPcBtn.disabled = true;
+    updatePcFileProgress(0, size, 'Recebendo do PC');
+    return true;
+  }
+
+  if (!activePcFileTransfer || String(message.id || '') !== activePcFileTransfer.id) return action.startsWith('pc-');
+
+  if (action === 'pc-chunk') {
+    try {
+      const bytes = base64ToUint8Array(message.data);
+      if (activePcFileTransfer.received + bytes.byteLength > activePcFileTransfer.size || activePcFileTransfer.received + bytes.byteLength > MAX_REMOTE_FILE_BYTES) {
+        throw new Error('Dados recebidos excedem o tamanho informado.');
+      }
+      activePcFileTransfer.chunks.push(bytes);
+      activePcFileTransfer.received += bytes.byteLength;
+      updatePcFileProgress(activePcFileTransfer.received, activePcFileTransfer.size, 'Recebendo do PC');
+    } catch (error) {
+      if (pcFileProgressText) pcFileProgressText.textContent = error?.message || 'Falha ao processar parte do arquivo.';
+      activePcFileTransfer = null;
+      if (fileRequestPcBtn) fileRequestPcBtn.disabled = false;
+    }
+    return true;
+  }
+
+  if (action === 'pc-progress') {
+    updatePcFileProgress(Number(message.sent || activePcFileTransfer.received), activePcFileTransfer.size, 'Recebendo do PC');
+    return true;
+  }
+
+  if (action === 'pc-complete') {
+    const transfer = activePcFileTransfer;
+    activePcFileTransfer = null;
+    if (fileRequestPcBtn) fileRequestPcBtn.disabled = false;
+    if (transfer.received !== transfer.size) {
+      if (pcFileProgressText) pcFileProgressText.textContent = `Arquivo incompleto: ${formatBytes(transfer.received)} de ${formatBytes(transfer.size)}.`;
+      return true;
+    }
+    const blob = new Blob(transfer.chunks, { type: 'application/octet-stream' });
+    pcFileObjectUrl = URL.createObjectURL(blob);
+    if (pcFileDownloadBtn) {
+      pcFileDownloadBtn.href = pcFileObjectUrl;
+      pcFileDownloadBtn.download = transfer.name;
+      pcFileDownloadBtn.hidden = false;
+    }
+    if (pcFileReceived) {
+      pcFileReceived.textContent = `${transfer.name} • ${formatBytes(transfer.size)}`;
+      pcFileReceived.hidden = false;
+    }
+    updatePcFileProgress(transfer.size, transfer.size, 'Recebido do PC');
+    toast('Arquivo recebido. Toque em “Baixar neste dispositivo”.');
+    return true;
+  }
+
+  return action.startsWith('pc-');
 }
 
 function openScreensModal() {
@@ -977,8 +1119,9 @@ async function startViewerWebRtc(code) {
     }
     if (fileControlBtn) {
       fileControlBtn.disabled = false;
-      fileControlBtn.title = 'Arquivo — enviar ao PC';
+      fileControlBtn.title = 'Arquivos — transferir nos dois sentidos';
     }
+    if (fileRequestPcBtn) fileRequestPcBtn.disabled = false;
     sendControlRaw({ type: 'screen', action: 'list' });
   };
   controlChannel.onclose = () => {
@@ -989,8 +1132,11 @@ async function startViewerWebRtc(code) {
     closeKeyboardModal();
     closeClipboardModal();
     if (activeFileTransfer) cancelFileTransfer();
+    activePcFileTransfer = null;
+    pcFileRequestPending = false;
     if (fileModal) fileModal.hidden = true;
     if (fileControlBtn) fileControlBtn.disabled = true;
+    if (fileRequestPcBtn) fileRequestPcBtn.disabled = true;
     if (clipboardControlBtn) clipboardControlBtn.disabled = true;
     if (viewerControlChannel === controlChannel) viewerControlChannel = null;
   };
@@ -1002,8 +1148,11 @@ async function startViewerWebRtc(code) {
     closeKeyboardModal();
     closeClipboardModal();
     if (activeFileTransfer) cancelFileTransfer();
+    activePcFileTransfer = null;
+    pcFileRequestPending = false;
     if (fileModal) fileModal.hidden = true;
     if (fileControlBtn) fileControlBtn.disabled = true;
+    if (fileRequestPcBtn) fileRequestPcBtn.disabled = true;
     if (clipboardControlBtn) clipboardControlBtn.disabled = true;
   };
   controlChannel.onmessage = (event) => {
@@ -1449,6 +1598,7 @@ fileModal?.addEventListener('click', (event) => { if (event.target === fileModal
 remoteFileInput?.addEventListener('change', refreshSelectedFileUi);
 fileSendBtn?.addEventListener('click', sendSelectedFile);
 fileCancelBtn?.addEventListener('click', cancelFileTransfer);
+fileRequestPcBtn?.addEventListener('click', requestFileFromPc);
 
 keyboardModalClose?.addEventListener('click', closeKeyboardModal);
 keyboardModal?.addEventListener('click', (event) => {
@@ -1814,3 +1964,5 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !screensModal?.hidden) closeScreensModal();
   if (event.key === 'Escape' && !aboutModal?.hidden) closeAboutModal();
 });
+
+window.addEventListener('beforeunload', clearPcFileDownload);
