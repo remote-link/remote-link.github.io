@@ -1,4 +1,4 @@
-# Remote Link Web — v0.6.10
+# Remote Link Web — v0.7.0
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -52,3 +52,13 @@ A senha permanente fica somente em memória durante a tentativa e não é persis
 - Ao voltar para Mouse, solicita cancelamento de qualquer contato touch pendente e restauração do cursor remoto.
 - Mantém os dois botões disponíveis durante toda a sessão.
 - Não altera vídeo, teclado, seleção de telas ou autenticação.
+
+
+## v0.7.0 — clipboard manual de texto
+
+- adiciona botão de clipboard na barra da sessão;
+- permite enviar texto para o clipboard do PC remoto e ler texto do clipboard do PC sob ação explícita;
+- permite colar/copiar no clipboard local quando o navegador conceder permissão;
+- limita cada transferência a 16.384 caracteres;
+- não existe sincronização automática ou captura em segundo plano;
+- o conteúdo trafega diretamente pelo WebRTC DataChannel, sem usar o Worker.

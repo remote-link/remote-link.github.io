@@ -22,6 +22,14 @@ const fullscreenBtn = document.getElementById('fullscreenBtn');
 const mouseControlBtn = document.getElementById('mouseControlBtn');
 const touchControlBtn = document.getElementById('touchControlBtn');
 const keyboardControlBtn = document.getElementById('keyboardControlBtn');
+const clipboardControlBtn = document.getElementById('clipboardControlBtn');
+const clipboardModal = document.getElementById('clipboardModal');
+const clipboardModalClose = document.getElementById('clipboardModalClose');
+const clipboardText = document.getElementById('clipboardText');
+const clipboardPasteLocalBtn = document.getElementById('clipboardPasteLocalBtn');
+const clipboardSendRemoteBtn = document.getElementById('clipboardSendRemoteBtn');
+const clipboardReadRemoteBtn = document.getElementById('clipboardReadRemoteBtn');
+const clipboardCopyLocalBtn = document.getElementById('clipboardCopyLocalBtn');
 const keyboardModal = document.getElementById('keyboardModal');
 const keyboardModalClose = document.getElementById('keyboardModalClose');
 const remoteKeyboardInput = document.getElementById('remoteKeyboardInput');
@@ -472,6 +480,18 @@ function handleControlChannelMessage(message) {
     renderRemoteMonitors();
     applyRemoteStageAspect();
     toast(`Tela ${message.index + 1} selecionada.`);
+    return;
+  }
+
+  if (message.type === 'clipboard') {
+    if (message.action === 'text') {
+      if (clipboardText) clipboardText.value = String(message.text || '').slice(0, 16384);
+      toast(clipboardText?.value ? 'Texto do clipboard do PC recebido.' : 'O clipboard do PC está vazio ou não contém texto.');
+      return;
+    }
+    if (message.action === 'status') {
+      toast(String(message.message || (message.ok ? 'Clipboard atualizado.' : 'Falha no clipboard.')));
+    }
   }
 }
 
@@ -514,6 +534,58 @@ function sendControlRaw(message) {
     return true;
   } catch {
     return false;
+  }
+}
+
+function openClipboardModal() {
+  if (!viewerControlChannel || viewerControlChannel.readyState !== 'open') {
+    toast('O canal de controle ainda não está pronto.');
+    return;
+  }
+  if (!clipboardModal) return;
+  clipboardModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  clipboardText?.focus({ preventScroll: true });
+}
+
+function closeClipboardModal() {
+  if (!clipboardModal) return;
+  clipboardModal.hidden = true;
+  try { clipboardText?.blur(); } catch { }
+  document.body.style.overflow = '';
+}
+
+async function pasteLocalClipboard() {
+  if (!navigator.clipboard?.readText) {
+    toast('Este navegador não liberou leitura do clipboard. Cole manualmente no campo.');
+    clipboardText?.focus();
+    return;
+  }
+  try {
+    const text = await navigator.clipboard.readText();
+    if (clipboardText) clipboardText.value = String(text || '').slice(0, 16384);
+  } catch {
+    toast('O navegador bloqueou a leitura. Cole manualmente no campo.');
+    clipboardText?.focus();
+  }
+}
+
+async function copyLocalClipboard() {
+  const text = String(clipboardText?.value || '');
+  if (!text) { toast('Não há texto para copiar.'); return; }
+  if (!navigator.clipboard?.writeText) {
+    clipboardText?.focus();
+    clipboardText?.select();
+    toast('Selecione e copie o texto manualmente.');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Texto copiado neste dispositivo.');
+  } catch {
+    clipboardText?.focus();
+    clipboardText?.select();
+    toast('O navegador bloqueou a cópia automática. Copie o texto selecionado.');
   }
 }
 
@@ -755,6 +827,10 @@ async function startViewerWebRtc(code) {
       keyboardControlBtn.disabled = false;
       keyboardControlBtn.title = 'Teclado — abrir teclado remoto';
     }
+    if (clipboardControlBtn) {
+      clipboardControlBtn.disabled = false;
+      clipboardControlBtn.title = 'Clipboard — transferir texto';
+    }
     sendControlRaw({ type: 'screen', action: 'list' });
   };
   controlChannel.onclose = () => {
@@ -763,6 +839,8 @@ async function startViewerWebRtc(code) {
     setTouchControlEnabled(false, { quiet: true });
     setKeyboardControlEnabled(false, { quiet: true });
     closeKeyboardModal();
+    closeClipboardModal();
+    if (clipboardControlBtn) clipboardControlBtn.disabled = true;
     if (viewerControlChannel === controlChannel) viewerControlChannel = null;
   };
   controlChannel.onerror = () => {
@@ -771,6 +849,8 @@ async function startViewerWebRtc(code) {
     setTouchControlEnabled(false, { quiet: true });
     setKeyboardControlEnabled(false, { quiet: true });
     closeKeyboardModal();
+    closeClipboardModal();
+    if (clipboardControlBtn) clipboardControlBtn.disabled = true;
   };
   controlChannel.onmessage = (event) => {
     try {
@@ -1188,6 +1268,22 @@ keyboardControlBtn?.addEventListener('click', () => {
   } else {
     openKeyboardModal();
   }
+});
+
+clipboardControlBtn?.addEventListener('click', () => {
+  if (clipboardModal?.hidden === false) closeClipboardModal();
+  else openClipboardModal();
+});
+clipboardModalClose?.addEventListener('click', closeClipboardModal);
+clipboardModal?.addEventListener('click', (event) => { if (event.target === clipboardModal) closeClipboardModal(); });
+clipboardPasteLocalBtn?.addEventListener('click', pasteLocalClipboard);
+clipboardCopyLocalBtn?.addEventListener('click', copyLocalClipboard);
+clipboardReadRemoteBtn?.addEventListener('click', () => {
+  if (!sendControlRaw({ type: 'clipboard', action: 'get' })) toast('Canal de clipboard indisponível.');
+});
+clipboardSendRemoteBtn?.addEventListener('click', () => {
+  const text = String(clipboardText?.value || '').slice(0, 16384);
+  if (!sendControlRaw({ type: 'clipboard', action: 'set', text })) toast('Canal de clipboard indisponível.');
 });
 
 keyboardModalClose?.addEventListener('click', closeKeyboardModal);
