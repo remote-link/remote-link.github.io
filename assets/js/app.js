@@ -20,6 +20,7 @@ const remoteVideo = document.getElementById('remoteVideo');
 const remoteMediaStatus = document.getElementById('remoteMediaStatus');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
 const mouseControlBtn = document.getElementById('mouseControlBtn');
+const touchControlBtn = document.getElementById('touchControlBtn');
 const keyboardControlBtn = document.getElementById('keyboardControlBtn');
 const keyboardModal = document.getElementById('keyboardModal');
 const keyboardModalClose = document.getElementById('keyboardModalClose');
@@ -138,6 +139,7 @@ let viewerOfferSent = false;
 let viewerWebRtcStarting = false;
 let viewerControlChannel = null;
 let mouseControlEnabled = false;
+let touchControlEnabled = false;
 let keyboardControlEnabled = false;
 let lastKeyboardSpecial = { key: null, at: 0 };
 let keyboardComposing = false;
@@ -328,6 +330,7 @@ function sendSignal(kind, data = null) {
 
 function setMouseControlEnabled(enabled, { quiet = false } = {}) {
   mouseControlEnabled = Boolean(enabled && viewerControlChannel?.readyState === 'open');
+  if (mouseControlEnabled && touchControlEnabled) setTouchControlEnabled(false, { quiet: true });
   remoteStage?.classList.toggle('mouse-control-active', mouseControlEnabled);
   mouseControlBtn?.classList.toggle('active', mouseControlEnabled);
   mouseControlBtn?.setAttribute('aria-pressed', mouseControlEnabled ? 'true' : 'false');
@@ -342,6 +345,25 @@ function setMouseControlEnabled(enabled, { quiet = false } = {}) {
 
   if (!quiet && mouseControlEnabled) toast('Controle do mouse ativado. Toque para clicar, segure para clique direito.');
   if (!quiet && !mouseControlEnabled && viewerControlChannel?.readyState === 'open') toast('Controle do mouse pausado.');
+}
+
+function setTouchControlEnabled(enabled, { quiet = false } = {}) {
+  touchControlEnabled = Boolean(enabled && viewerControlChannel?.readyState === 'open');
+  if (touchControlEnabled && mouseControlEnabled) setMouseControlEnabled(false, { quiet: true });
+  remoteStage?.classList.toggle('touch-control-active', touchControlEnabled);
+  touchControlBtn?.classList.toggle('active', touchControlEnabled);
+  touchControlBtn?.setAttribute('aria-pressed', touchControlEnabled ? 'true' : 'false');
+
+  if (touchControlBtn) {
+    const available = viewerControlChannel?.readyState === 'open';
+    touchControlBtn.disabled = !available;
+    touchControlBtn.title = available
+      ? (touchControlEnabled ? 'Touch — controle ativo' : 'Touch — ativar toque direto')
+      : 'Touch — aguardando canal de controle';
+  }
+
+  if (!quiet && touchControlEnabled) toast('Touchscreen remoto ativado. Toque e arraste diretamente na tela do computador.');
+  if (!quiet && !touchControlEnabled && viewerControlChannel?.readyState === 'open') toast('Touchscreen remoto pausado.');
 }
 
 function setKeyboardControlEnabled(enabled, { quiet = false } = {}) {
@@ -499,6 +521,7 @@ function getRemotePoint(clientX, clientY) {
   const rect = remoteVideo.getBoundingClientRect();
   if (!rect.width || !rect.height) return null;
 
+  // Primeiro remove as barras criadas pelo object-fit do elemento <video>.
   const videoAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
   const boxAspect = rect.width / rect.height;
   let contentWidth = rect.width;
@@ -514,10 +537,30 @@ function getRemotePoint(clientX, clientY) {
     offsetY = (rect.height - contentHeight) / 2;
   }
 
-  const x = (clientX - rect.left - offsetX) / contentWidth;
-  const y = (clientY - rect.top - offsetY) / contentHeight;
-  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
-  return { x, y };
+  let encodedX = (clientX - rect.left - offsetX) / contentWidth;
+  let encodedY = (clientY - rect.top - offsetY) / contentHeight;
+  if (encodedX < 0 || encodedX > 1 || encodedY < 0 || encodedY > 1) return null;
+
+  // O Agent v0.6.2 usa canvas VP8 fixo 16:9. Se o monitor tiver outra
+  // proporcao, a imagem real fica centralizada dentro desse canvas. Removemos
+  // essas barras internas antes de converter a coordenada para o monitor.
+  const monitor = remoteMonitors.find(item => item.index === selectedRemoteMonitorIndex);
+  if (monitor?.width > 0 && monitor?.height > 0) {
+    const monitorAspect = monitor.width / monitor.height;
+    let innerX = 0, innerY = 0, innerW = 1, innerH = 1;
+    if (videoAspect > monitorAspect) {
+      innerW = monitorAspect / videoAspect;
+      innerX = (1 - innerW) / 2;
+    } else if (videoAspect < monitorAspect) {
+      innerH = videoAspect / monitorAspect;
+      innerY = (1 - innerH) / 2;
+    }
+    encodedX = (encodedX - innerX) / innerW;
+    encodedY = (encodedY - innerY) / innerH;
+    if (encodedX < 0 || encodedX > 1 || encodedY < 0 || encodedY > 1) return null;
+  }
+
+  return { x: encodedX, y: encodedY };
 }
 
 function sendMouseMove(clientX, clientY, force = false) {
@@ -663,6 +706,10 @@ async function startViewerWebRtc(code) {
       mouseControlBtn.disabled = false;
       mouseControlBtn.title = 'Mouse — ativar controle';
     }
+    if (touchControlBtn) {
+      touchControlBtn.disabled = false;
+      touchControlBtn.title = 'Touch — ativar toque direto';
+    }
     if (keyboardControlBtn) {
       keyboardControlBtn.disabled = false;
       keyboardControlBtn.title = 'Teclado — abrir teclado remoto';
@@ -672,6 +719,7 @@ async function startViewerWebRtc(code) {
   controlChannel.onclose = () => {
     diagEvent('DataChannel de controle encerrado.');
     setMouseControlEnabled(false, { quiet: true });
+    setTouchControlEnabled(false, { quiet: true });
     setKeyboardControlEnabled(false, { quiet: true });
     closeKeyboardModal();
     if (viewerControlChannel === controlChannel) viewerControlChannel = null;
@@ -679,6 +727,7 @@ async function startViewerWebRtc(code) {
   controlChannel.onerror = () => {
     diagEvent('Falha no DataChannel de controle.');
     setMouseControlEnabled(false, { quiet: true });
+    setTouchControlEnabled(false, { quiet: true });
     setKeyboardControlEnabled(false, { quiet: true });
     closeKeyboardModal();
   };
@@ -1084,6 +1133,14 @@ mouseControlBtn?.addEventListener('click', () => {
   setMouseControlEnabled(!mouseControlEnabled);
 });
 
+touchControlBtn?.addEventListener('click', () => {
+  if (!viewerControlChannel || viewerControlChannel.readyState !== 'open') {
+    toast('O canal de controle ainda não está pronto.');
+    return;
+  }
+  setTouchControlEnabled(!touchControlEnabled);
+});
+
 keyboardControlBtn?.addEventListener('click', () => {
   if (keyboardModal?.hidden === false) {
     closeKeyboardModal();
@@ -1262,6 +1319,49 @@ remoteStage?.addEventListener('wheel', (event) => {
 }, { passive: false });
 
 remoteStage?.addEventListener('touchstart', (event) => {
+  if (!touchControlEnabled || !remoteStage.classList.contains('media-active')) return;
+  if (event.touches.length !== 1) return;
+  const touch = event.touches[0];
+  const point = getRemotePoint(touch.clientX, touch.clientY);
+  if (!point) return;
+  pointerGesture = { pointerId: 'native-touch', pointerType: 'native-touch', lastX: touch.clientX, lastY: touch.clientY };
+  sendControlRaw({ type: 'touch', action: 'down', x: point.x, y: point.y });
+  event.preventDefault();
+}, { passive: false });
+
+remoteStage?.addEventListener('touchmove', (event) => {
+  if (!touchControlEnabled || !pointerGesture || pointerGesture.pointerType !== 'native-touch') return;
+  if (event.touches.length !== 1) return;
+  const touch = event.touches[0];
+  const point = getRemotePoint(touch.clientX, touch.clientY);
+  if (!point) return;
+  pointerGesture.lastX = touch.clientX;
+  pointerGesture.lastY = touch.clientY;
+  sendControlRaw({ type: 'touch', action: 'move', x: point.x, y: point.y });
+  event.preventDefault();
+}, { passive: false });
+
+remoteStage?.addEventListener('touchend', (event) => {
+  if (!touchControlEnabled || !pointerGesture || pointerGesture.pointerType !== 'native-touch') return;
+  const gesture = pointerGesture;
+  const changed = event.changedTouches?.[0];
+  const x = changed?.clientX ?? gesture.lastX;
+  const y = changed?.clientY ?? gesture.lastY;
+  const point = getRemotePoint(x, y);
+  resetPointerGesture();
+  if (point) sendControlRaw({ type: 'touch', action: 'up', x: point.x, y: point.y });
+  event.preventDefault();
+}, { passive: false });
+
+remoteStage?.addEventListener('touchcancel', () => {
+  if (touchControlEnabled && pointerGesture?.pointerType === 'native-touch') {
+    const point = getRemotePoint(pointerGesture.lastX, pointerGesture.lastY);
+    if (point) sendControlRaw({ type: 'touch', action: 'up', x: point.x, y: point.y });
+    resetPointerGesture();
+  }
+}, { passive: true });
+
+remoteStage?.addEventListener('touchstart', (event) => {
   if (!mouseControlEnabled || !remoteStage.classList.contains('media-active')) return;
 
   if (event.touches.length === 2) {
@@ -1373,7 +1473,7 @@ fullscreenBtn?.addEventListener('click', async () => {
 renderTrustedDevices();
 
 
-// Rodapé / modal Sobre — v0.6.1
+// Rodapé / modal Sobre — v0.6.2
 const aboutLink = document.getElementById('aboutLink');
 const aboutModal = document.getElementById('aboutModal');
 const aboutModalClose = document.getElementById('aboutModalClose');

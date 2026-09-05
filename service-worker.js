@@ -1,4 +1,4 @@
-const CACHE_NAME = 'remote-link-v0.6.1';
+const CACHE_NAME = 'remote-link-v0.6.2';
 const APP_SHELL = [
   '/',
   '/index.html',
