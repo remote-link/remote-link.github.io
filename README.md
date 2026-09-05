@@ -1,4 +1,4 @@
-# Remote Link Web — v0.8.2
+# Remote Link Web — v0.8.3
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -73,6 +73,15 @@ A senha permanente fica somente em memória durante a tentativa e não é persis
 - O PC salva em `Downloads\Remote Link`.
 - Nenhum upload acontece automaticamente.
 
+
+
+## v0.8.3 — rolagem do painel de arquivos no mobile
+
+- Corrige modal de Arquivos maior que a altura visível do smartphone.
+- Mantém rolagem vertical própria dentro do modal.
+- Impede que a proteção contra pull-to-refresh bloqueie a rolagem dos modais.
+- Considera a área segura inferior do Android/PWA.
+- Preserva transferência de arquivos nos dois sentidos e todos os controles remotos existentes.
 
 ## v0.8.2 — arquivo do PC para este dispositivo
 

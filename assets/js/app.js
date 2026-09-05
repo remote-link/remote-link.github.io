@@ -204,6 +204,11 @@ window.addEventListener('touchmove', (event) => {
   if (!document.documentElement.classList.contains('remote-session-guard')) return;
   if (remotePullStartY === null || event.touches.length !== 1) return;
 
+  // Modais altos (Arquivos, Teclado etc.) precisam manter a rolagem nativa.
+  // O bloqueio de pull-to-refresh não deve interceptar esses gestos.
+  const modalContent = event.target instanceof Element ? event.target.closest('.about-modal') : null;
+  if (modalContent && modalContent.scrollHeight > modalContent.clientHeight) return;
+
   const deltaY = event.touches[0].clientY - remotePullStartY;
   // No topo da pagina, arrastar para baixo e o gesto que dispara o refresh
   // nativo do Chrome Android. Bloqueamos somente esse movimento.

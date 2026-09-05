@@ -76,3 +76,14 @@ body.remote-session-guard{
 .file-actions-single{grid-template-columns:1fr}
 .file-download-btn{display:block;text-align:center;text-decoration:none;min-height:44px;line-height:44px;margin-top:10px}
 .file-download-btn[hidden]{display:none}
+
+
+/* v0.8.3 — modais altos continuam roláveis no mobile. */
+.modal-backdrop{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;align-items:start}
+.about-modal{max-height:calc(100dvh - 40px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;margin:auto 0}
+.file-modal{scrollbar-gutter:stable;overflow-x:hidden}
+@media(max-width:480px){
+  .modal-backdrop{padding:12px}
+  .about-modal{max-height:calc(100dvh - 24px);padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+  .file-modal{width:100%}
+}
