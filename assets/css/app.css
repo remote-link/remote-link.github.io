@@ -56,3 +56,17 @@ body.remote-session-guard{
 .clipboard-actions button{min-height:44px;padding:10px 11px}
 .clipboard-modal small{line-height:1.45}
 @media(max-width:420px){.control-bar{gap:7px}.control-bar button{min-height:48px}.clipboard-actions{grid-template-columns:1fr}}
+
+
+/* v0.8.0 — envio manual de arquivos */
+.control-bar #fileControlBtn{font-size:1.08rem}
+.file-help{color:#91a0b7;line-height:1.45;margin:0 0 12px}
+.file-picker{display:block;width:100%;padding:11px;border:1px solid rgba(148,163,184,.25);border-radius:10px;background:#0f172a;color:#e5edf8}
+.file-selection{margin:10px 0;color:#d9e3f0;font-size:.92rem;overflow-wrap:anywhere}
+.file-progress{margin:14px 0}
+.file-progress-track{height:8px;border-radius:999px;background:rgba(148,163,184,.2);overflow:hidden}
+.file-progress-bar{height:100%;width:0;background:currentColor;transition:width .15s ease}
+.file-progress small{display:block;margin-top:7px;color:#91a0b7}
+.file-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.file-actions button{min-height:44px}
+@media(max-width:420px){.file-actions{grid-template-columns:1fr}}

@@ -1,4 +1,4 @@
-# Remote Link Web — v0.7.0
+# Remote Link Web — v0.8.0
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -54,7 +54,7 @@ A senha permanente fica somente em memória durante a tentativa e não é persis
 - Não altera vídeo, teclado, seleção de telas ou autenticação.
 
 
-## v0.7.0 — clipboard manual de texto
+## v0.8.0 — clipboard manual de texto
 
 - adiciona botão de clipboard na barra da sessão;
 - permite enviar texto para o clipboard do PC remoto e ler texto do clipboard do PC sob ação explícita;
@@ -62,3 +62,13 @@ A senha permanente fica somente em memória durante a tentativa e não é persis
 - limita cada transferência a 16.384 caracteres;
 - não existe sincronização automática ou captura em segundo plano;
 - o conteúdo trafega diretamente pelo WebRTC DataChannel, sem usar o Worker.
+
+
+## v0.8.0 — envio manual de arquivos
+
+- Novo botão `📁` durante a sessão.
+- Envio manual de um arquivo do viewer para o PC remoto.
+- Limite inicial: 10 MB por arquivo.
+- Transmissão em blocos pelo WebRTC DataChannel; não passa pelo Worker.
+- O PC salva em `Downloads\Remote Link`.
+- Nenhum upload acontece automaticamente.

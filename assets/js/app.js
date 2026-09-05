@@ -30,6 +30,15 @@ const clipboardPasteLocalBtn = document.getElementById('clipboardPasteLocalBtn')
 const clipboardSendRemoteBtn = document.getElementById('clipboardSendRemoteBtn');
 const clipboardReadRemoteBtn = document.getElementById('clipboardReadRemoteBtn');
 const clipboardCopyLocalBtn = document.getElementById('clipboardCopyLocalBtn');
+const fileControlBtn = document.getElementById('fileControlBtn');
+const fileModal = document.getElementById('fileModal');
+const fileModalClose = document.getElementById('fileModalClose');
+const remoteFileInput = document.getElementById('remoteFileInput');
+const fileSelection = document.getElementById('fileSelection');
+const fileProgressBar = document.getElementById('fileProgressBar');
+const fileProgressText = document.getElementById('fileProgressText');
+const fileSendBtn = document.getElementById('fileSendBtn');
+const fileCancelBtn = document.getElementById('fileCancelBtn');
 const keyboardModal = document.getElementById('keyboardModal');
 const keyboardModalClose = document.getElementById('keyboardModalClose');
 const remoteKeyboardInput = document.getElementById('remoteKeyboardInput');
@@ -47,6 +56,10 @@ const diagTrack = document.getElementById('diagTrack');
 const diagLastEvent = document.getElementById('diagLastEvent');
 
 let deferredPrompt = null;
+
+const MAX_REMOTE_FILE_BYTES = 10 * 1024 * 1024;
+const FILE_CHUNK_BYTES = 16 * 1024;
+let activeFileTransfer = null;
 
 const INSTALL_NUDGE_VISIBLE_MS = 8000;
 const INSTALL_SWIPE_DISMISS_PX = 48;
@@ -491,7 +504,12 @@ function handleControlChannelMessage(message) {
     }
     if (message.action === 'status') {
       toast(String(message.message || (message.ok ? 'Clipboard atualizado.' : 'Falha no clipboard.')));
+      return;
     }
+  }
+
+  if (message.type === 'file') {
+    handleFileTransferMessage(message);
   }
 }
 
@@ -586,6 +604,132 @@ async function copyLocalClipboard() {
     clipboardText?.focus();
     clipboardText?.select();
     toast('O navegador bloqueou a cópia automática. Copie o texto selecionado.');
+  }
+}
+
+function openFileModal() {
+  if (!viewerControlChannel || viewerControlChannel.readyState !== 'open') {
+    toast('O canal de controle ainda não está pronto.');
+    return;
+  }
+  if (!fileModal) return;
+  fileModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  refreshSelectedFileUi();
+}
+
+function closeFileModal() {
+  if (!fileModal || activeFileTransfer) return;
+  fileModal.hidden = true;
+  document.body.style.overflow = '';
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function refreshSelectedFileUi() {
+  const file = remoteFileInput?.files?.[0];
+  if (fileSelection) fileSelection.textContent = file ? `${file.name} • ${formatBytes(file.size)}` : 'Nenhum arquivo selecionado.';
+  if (fileSendBtn) fileSendBtn.disabled = !file || file.size > MAX_REMOTE_FILE_BYTES || Boolean(activeFileTransfer);
+  if (fileProgressText && !activeFileTransfer) {
+    fileProgressText.textContent = file && file.size > MAX_REMOTE_FILE_BYTES ? 'Arquivo excede o limite de 10 MB.' : 'Aguardando envio.';
+  }
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + 0x8000, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+async function waitForControlBuffer() {
+  while (viewerControlChannel && viewerControlChannel.readyState === 'open' && viewerControlChannel.bufferedAmount > 512 * 1024) {
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  return viewerControlChannel?.readyState === 'open';
+}
+
+async function sendSelectedFile() {
+  const file = remoteFileInput?.files?.[0];
+  if (!file) { toast('Escolha um arquivo primeiro.'); return; }
+  if (file.size > MAX_REMOTE_FILE_BYTES) { toast('O limite atual é de 10 MB por arquivo.'); return; }
+  if (!viewerControlChannel || viewerControlChannel.readyState !== 'open') { toast('Canal de arquivo indisponível.'); return; }
+  if (activeFileTransfer) return;
+
+  const id = (crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  activeFileTransfer = { id, file, cancelled: false, sent: 0 };
+  if (fileSendBtn) fileSendBtn.disabled = true;
+  if (fileCancelBtn) fileCancelBtn.disabled = false;
+  if (fileProgressBar) fileProgressBar.style.width = '0%';
+  if (fileProgressText) fileProgressText.textContent = 'Preparando envio...';
+
+  if (!sendControlRaw({ type: 'file', action: 'start', id, name: file.name, size: file.size })) {
+    finishFileTransfer(false, 'Não foi possível iniciar a transferência.');
+    return;
+  }
+
+  try {
+    for (let offset = 0; offset < file.size; offset += FILE_CHUNK_BYTES) {
+      if (!activeFileTransfer || activeFileTransfer.id !== id || activeFileTransfer.cancelled) return;
+      if (!await waitForControlBuffer()) throw new Error('Canal WebRTC encerrado.');
+      const slice = file.slice(offset, Math.min(offset + FILE_CHUNK_BYTES, file.size));
+      const data = arrayBufferToBase64(await slice.arrayBuffer());
+      if (!sendControlRaw({ type: 'file', action: 'chunk', id, data })) throw new Error('Falha ao enviar parte do arquivo.');
+      activeFileTransfer.sent = Math.min(offset + slice.size, file.size);
+      updateFileProgress(activeFileTransfer.sent, file.size, 'Enviando');
+    }
+    if (!sendControlRaw({ type: 'file', action: 'complete', id })) throw new Error('Falha ao concluir envio.');
+    if (fileProgressText) fileProgressText.textContent = 'Finalizando no computador remoto...';
+  } catch (error) {
+    sendControlRaw({ type: 'file', action: 'cancel', id });
+    finishFileTransfer(false, error?.message || 'Falha no envio.');
+  }
+}
+
+function updateFileProgress(received, total, label = 'Enviando') {
+  const percent = total > 0 ? Math.min(100, Math.round((received / total) * 100)) : 100;
+  if (fileProgressBar) fileProgressBar.style.width = `${percent}%`;
+  if (fileProgressText) fileProgressText.textContent = `${label}: ${percent}% • ${formatBytes(received)} de ${formatBytes(total)}`;
+}
+
+function cancelFileTransfer() {
+  const transfer = activeFileTransfer;
+  if (!transfer) return;
+  transfer.cancelled = true;
+  sendControlRaw({ type: 'file', action: 'cancel', id: transfer.id });
+  finishFileTransfer(false, 'Transferência cancelada.');
+}
+
+function finishFileTransfer(ok, message) {
+  activeFileTransfer = null;
+  if (fileCancelBtn) fileCancelBtn.disabled = true;
+  if (fileSendBtn) fileSendBtn.disabled = !(remoteFileInput?.files?.[0]);
+  if (fileProgressText) fileProgressText.textContent = message;
+  if (ok && fileProgressBar) fileProgressBar.style.width = '100%';
+  toast(message);
+}
+
+function handleFileTransferMessage(message) {
+  if (!activeFileTransfer || message.id !== activeFileTransfer.id) return;
+  if (message.action === 'progress') {
+    updateFileProgress(Number(message.received || 0), activeFileTransfer.file.size, 'Recebido pelo PC');
+    return;
+  }
+  if (message.action === 'status') {
+    if (!message.ok) {
+      finishFileTransfer(false, String(message.message || 'Falha na transferência.'));
+      return;
+    }
+    if (message.stage === 'complete') {
+      finishFileTransfer(true, String(message.message || 'Arquivo enviado com sucesso.'));
+    }
   }
 }
 
@@ -831,6 +975,10 @@ async function startViewerWebRtc(code) {
       clipboardControlBtn.disabled = false;
       clipboardControlBtn.title = 'Clipboard — transferir texto';
     }
+    if (fileControlBtn) {
+      fileControlBtn.disabled = false;
+      fileControlBtn.title = 'Arquivo — enviar ao PC';
+    }
     sendControlRaw({ type: 'screen', action: 'list' });
   };
   controlChannel.onclose = () => {
@@ -840,6 +988,9 @@ async function startViewerWebRtc(code) {
     setKeyboardControlEnabled(false, { quiet: true });
     closeKeyboardModal();
     closeClipboardModal();
+    if (activeFileTransfer) cancelFileTransfer();
+    if (fileModal) fileModal.hidden = true;
+    if (fileControlBtn) fileControlBtn.disabled = true;
     if (clipboardControlBtn) clipboardControlBtn.disabled = true;
     if (viewerControlChannel === controlChannel) viewerControlChannel = null;
   };
@@ -850,6 +1001,9 @@ async function startViewerWebRtc(code) {
     setKeyboardControlEnabled(false, { quiet: true });
     closeKeyboardModal();
     closeClipboardModal();
+    if (activeFileTransfer) cancelFileTransfer();
+    if (fileModal) fileModal.hidden = true;
+    if (fileControlBtn) fileControlBtn.disabled = true;
     if (clipboardControlBtn) clipboardControlBtn.disabled = true;
   };
   controlChannel.onmessage = (event) => {
@@ -1285,6 +1439,16 @@ clipboardSendRemoteBtn?.addEventListener('click', () => {
   const text = String(clipboardText?.value || '').slice(0, 16384);
   if (!sendControlRaw({ type: 'clipboard', action: 'set', text })) toast('Canal de clipboard indisponível.');
 });
+
+fileControlBtn?.addEventListener('click', () => {
+  if (fileModal?.hidden === false) closeFileModal();
+  else openFileModal();
+});
+fileModalClose?.addEventListener('click', closeFileModal);
+fileModal?.addEventListener('click', (event) => { if (event.target === fileModal) closeFileModal(); });
+remoteFileInput?.addEventListener('change', refreshSelectedFileUi);
+fileSendBtn?.addEventListener('click', sendSelectedFile);
+fileCancelBtn?.addEventListener('click', cancelFileTransfer);
 
 keyboardModalClose?.addEventListener('click', closeKeyboardModal);
 keyboardModal?.addEventListener('click', (event) => {

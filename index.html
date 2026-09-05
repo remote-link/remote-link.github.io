@@ -179,6 +179,7 @@
         <button id="touchControlBtn" type="button" title="Touch — aguardando canal de controle" aria-pressed="false" disabled>☝</button>
         <button id="keyboardControlBtn" type="button" title="Teclado — aguardando canal de controle" aria-pressed="false" disabled>⌨</button>
         <button id="clipboardControlBtn" type="button" title="Clipboard — aguardando canal de controle" disabled>📋</button>
+        <button id="fileControlBtn" type="button" title="Arquivo — aguardando canal de controle" disabled>📁</button>
         <button id="screensControlBtn" type="button" title="Telas — aguardando informações do computador" disabled>▣</button>
         <button id="fullscreenBtn" type="button" title="Tela cheia">⛶</button>
       </nav>
@@ -186,7 +187,7 @@
 
     <footer class="footer footer-centered">
       <button id="aboutLink" class="footer-about-link" type="button" aria-haspopup="dialog" aria-controls="aboutModal">
-        © Remote Link - v0.7.0
+        © Remote Link - v0.8.0
       </button>
     </footer>
   </main>
@@ -197,7 +198,7 @@
       <h2 id="aboutModalTitle">Remote Link</h2>
       <p><strong>Desenvolvido por:</strong> Mizael Nunes.</p>
       <p><strong>Email:</strong> <a href="mailto:mizaelnunes001@hotmail.com">mizaelnunes001@hotmail.com</a></p>
-      <small>Remote Link • v0.7.0</small>
+      <small>Remote Link • v0.8.0</small>
     </section>
   </div>
 
@@ -231,7 +232,7 @@
         <button type="button" data-shortcut="Control+v">Ctrl+V</button>
         <button type="button" data-shortcut="Control+x">Ctrl+X</button>
       </div>
-      <small>Ctrl+C/V atuam no clipboard do próprio computador remoto. Transferência de clipboard entre os dispositivos será uma etapa separada.</small>
+      <small>Ctrl+C/V atuam no clipboard do próprio computador remoto. Para transferir texto entre os dispositivos, use o botão 📋.</small>
     </section>
   </div>
 
@@ -249,6 +250,26 @@
         <button id="clipboardCopyLocalBtn" class="secondary-btn" type="button">Copiar neste dispositivo</button>
       </div>
       <small>Somente texto, até 16.384 caracteres por transferência. O conteúdo passa diretamente pelo WebRTC DataChannel.</small>
+    </section>
+  </div>
+
+
+  <div id="fileModal" class="modal-backdrop" hidden>
+    <section class="about-modal file-modal" role="dialog" aria-modal="true" aria-labelledby="fileModalTitle">
+      <button id="fileModalClose" class="modal-close" type="button" aria-label="Fechar">×</button>
+      <h2 id="fileModalTitle">Enviar arquivo ao PC</h2>
+      <p class="file-help">Escolha um arquivo deste dispositivo. O envio é manual e direto pela sessão WebRTC.</p>
+      <input id="remoteFileInput" class="file-picker" type="file">
+      <div id="fileSelection" class="file-selection">Nenhum arquivo selecionado.</div>
+      <div class="file-progress" aria-live="polite">
+        <div class="file-progress-track"><div id="fileProgressBar" class="file-progress-bar"></div></div>
+        <small id="fileProgressText">Aguardando arquivo.</small>
+      </div>
+      <div class="file-actions">
+        <button id="fileSendBtn" class="primary-btn" type="button" disabled>Enviar ao PC</button>
+        <button id="fileCancelBtn" class="secondary-btn" type="button" disabled>Cancelar</button>
+      </div>
+      <small>Limite inicial: 10 MB. O arquivo será salvo em Downloads\Remote Link no computador remoto.</small>
     </section>
   </div>
 
