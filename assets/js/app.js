@@ -364,6 +364,7 @@ function setMouseControlEnabled(enabled, { quiet = false } = {}) {
   if (next) touchControlEnabled = false;
   resetPointerGesture();
   syncPointerModeButtons();
+  if (next) sendControlRaw({ type: 'mode', mode: 'mouse' });
 
   if (!quiet && mouseControlEnabled) toast('Controle do mouse ativado. Toque para clicar, segure para clique direito.');
   if (!quiet && !mouseControlEnabled && available) toast('Controle do mouse pausado.');
@@ -377,6 +378,7 @@ function setTouchControlEnabled(enabled, { quiet = false } = {}) {
   if (next) mouseControlEnabled = false;
   resetPointerGesture();
   syncPointerModeButtons();
+  if (next) sendControlRaw({ type: 'mode', mode: 'touch' });
 
   if (!quiet && touchControlEnabled) toast('Toque direto ativado. Toque exatamente onde deseja clicar; nas bordas, o alvo é ajustado automaticamente.');
   if (!quiet && !touchControlEnabled && available) toast('Touchscreen remoto pausado.');

@@ -1,4 +1,4 @@
-# Remote Link Web — v0.6.9
+# Remote Link Web — v0.6.10
 
 PWA do Remote Link hospedada no GitHub Pages.
 
@@ -13,7 +13,7 @@ Informe o ID fixo de 9 dígitos e a senha definida no Agent. O acesso é iniciad
 A senha permanente fica somente em memória durante a tentativa e não é persistida pela PWA. Vídeo, mouse, teclado, seleção de monitores, tela cheia e proteção contra pull-to-refresh permanecem disponíveis.
 
 
-## v0.6.9 — alternancia Mouse/Touch
+## v0.6.10 — alternancia Mouse/Touch
 
 - corrige alternancia entre os modos Mouse e Touch sem exigir nova conexao;
 - mantem ambos os botoes disponiveis enquanto o DataChannel estiver aberto;
@@ -45,3 +45,10 @@ A senha permanente fica somente em memória durante a tentativa e não é persis
 - mantém o modo 🖱 separado para clique, clique direito e scroll;
 - corrige o mapeamento das coordenadas quando o Agent usa barras internas no canvas fixo 1280x720;
 - preserva teclado, múltiplos monitores e autenticação da v0.6.1.
+
+## v0.6.10 — troca explícita Mouse/Touch
+
+- Envia ao Agent a mudança de modo assim que Mouse ou Touch é ativado.
+- Ao voltar para Mouse, solicita cancelamento de qualquer contato touch pendente e restauração do cursor remoto.
+- Mantém os dois botões disponíveis durante toda a sessão.
+- Não altera vídeo, teclado, seleção de telas ou autenticação.
