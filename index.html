@@ -25,53 +25,58 @@
       <button id="installBtn" class="ghost-btn install-nudge" type="button" hidden aria-label="Instalar Remote Link">Instalar</button>
     </header>
 
-    <section id="homeView" class="view active">
+    <section id="homeView" class="view active home-dashboard">
       <div class="hero">
         <span class="status-dot"></span>
         <span>Pronto para conectar</span>
       </div>
 
-      <section class="panel">
-        <div class="section-title">
-          <div>
-            <h2>Meus computadores</h2>
-            
-          </div>
+      <section class="panel home-card home-card-computers">
+        <div class="home-card-title">
+          <h2>Meus computadores</h2>
+          <span class="home-chevron" aria-hidden="true">›</span>
         </div>
 
-        <div id="trustedList" class="device-list">
-          <div class="empty-state">
-            <div class="empty-icon">⌁</div>
+        <div id="trustedList" class="device-list home-device-list">
+          <div class="empty-state home-empty-state">
+            <div class="home-device-icon" aria-hidden="true">▱</div>
             <strong>Nenhum computador pareado</strong>
-            
           </div>
         </div>
 
-        <button id="pairBtn" class="secondary-btn full" type="button">
-          <span>▣</span> Adicionar por QR Code
+        <button id="pairBtn" class="home-action-btn home-action-green full" type="button">
+          <span class="home-action-icon" aria-hidden="true">▦</span>
+          <span>Adicionar por QR Code</span>
         </button>
       </section>
 
-      <section class="panel">
-        <div class="section-title">
-          <div>
-            <h2>Suporte remoto supervisionado</h2>
-            
-          </div>
+      <section class="panel home-card home-card-action">
+        <div class="home-card-title">
+          <h2>Suporte remoto</h2>
+          <span class="home-chevron" aria-hidden="true">›</span>
         </div>
-
-        <button id="supportBtn" class="primary-btn full" type="button">
-          Conectar por código
-        </button>
+        <div class="home-action-row">
+          <span class="home-side-icon" aria-hidden="true">▱</span>
+          <button id="supportBtn" class="primary-btn full" type="button">Conectar por código</button>
+        </div>
       </section>
 
-      <section class="panel">
-        <div class="section-title"><div>
+      <section class="panel home-card home-card-action">
+        <div class="home-card-title">
           <h2>Acesso permanente</h2>
-          
-        </div></div>
-        <button id="permanentBtn" class="secondary-btn full" type="button">Conectar por ID permanente</button>
+          <span class="home-chevron" aria-hidden="true">›</span>
+        </div>
+        <div class="home-action-row">
+          <span class="home-side-icon home-server-icon" aria-hidden="true">▤</span>
+          <button id="permanentBtn" class="secondary-btn full" type="button">Conectar por ID permanente</button>
+        </div>
       </section>
+
+      <div class="home-utility-row" aria-label="Atalhos">
+        <button id="homeHelpBtn" class="home-utility-btn" type="button"><span>?</span><small>Ajuda</small></button>
+        <button id="homeAboutBtn" class="home-utility-btn" type="button"><span>ⓘ</span><small>Sobre</small></button>
+        <button id="homeLanguageBtn" class="home-utility-btn" type="button"><span>◎</span><small>Idioma</small></button>
+      </div>
     </section>
 
     <section id="supportView" class="view">
@@ -189,7 +194,7 @@
 
     <footer class="footer footer-centered">
       <button id="aboutLink" class="footer-about-link" type="button" aria-haspopup="dialog" aria-controls="aboutModal">
-        © Remote Link - v1.1.0
+        © Remote Link - v1.1.1
       </button>
     </footer>
   </main>
@@ -200,7 +205,7 @@
       <h2 id="aboutModalTitle">Remote Link</h2>
       <p><strong>Desenvolvido por:</strong> Mizael Nunes.</p>
       <p><strong>Email:</strong> <a href="mailto:mizaelnunes001@hotmail.com">mizaelnunes001@hotmail.com</a></p>
-      <small>Remote Link • v1.1.0</small>
+      <small>Remote Link • v1.1.1</small>
     </section>
   </div>
 

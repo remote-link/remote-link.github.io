@@ -2138,3 +2138,11 @@ document.addEventListener('keydown', (event) => {
 window.addEventListener('beforeunload', clearPcFileDownload);
 
 void autoConnectFromQrUrl();
+
+
+// v1.1.1 — atalhos do dashboard inicial
+document.getElementById('homeHelpBtn')?.addEventListener('click', () => showView('pairView'));
+document.getElementById('homeAboutBtn')?.addEventListener('click', openAboutModal);
+document.getElementById('homeLanguageBtn')?.addEventListener('click', () => {
+  toast('Idioma da PWA: Português (Brasil). Outros idiomas serão disponibilizados gradualmente.');
+});

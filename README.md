@@ -1,4 +1,4 @@
-# Remote Link Web — v1.1.0
+# Remote Link Web — v1.1.1
 
 ## Conexão automática por QR presencial
 
@@ -106,8 +106,18 @@ A senha permanente fica somente em memória durante a tentativa e não é persis
 - Fecha o painel de arquivos enquanto o seletor do Windows esta aberto, deixando a tela remota livre para operacao.
 - Reabre o painel quando a transferencia inicia ou a selecao e cancelada.
 
-## v1.1.0
+## v1.1.1
 - Home mais clean com remoção de frases redundantes.
 - Pinch-to-zoom de 100% a 300% e pan com dois dedos na tela remota.
 - Mapeamento de Mouse/Touch considera zoom e deslocamento.
 - Teclado remoto inclui F1-F12, Home, End, Page Up/Down, Insert, Delete, Print Screen e Alt+Tab.
+
+
+## v1.1.1 — acabamento visual do dashboard
+
+- Dashboard inicial alinhado ao mockup aprovado.
+- Cards mais compactos e responsivos no mobile.
+- CTA verde para adicionar por QR Code.
+- Ícones laterais e chevrons nos cards principais.
+- Atalhos compactos Ajuda, Sobre e Idioma.
+- Mantém todas as funcionalidades da v1.1.0.
