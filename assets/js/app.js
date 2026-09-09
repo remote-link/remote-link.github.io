@@ -178,6 +178,12 @@ let multiTouchScroll = false;
 let lastTwoFingerY = null;
 let remoteMonitors = [];
 let selectedRemoteMonitorIndex = 0;
+let remoteZoom = 1;
+let remotePanX = 0;
+let remotePanY = 0;
+let pinchGesture = null;
+let lastStageTapAt = 0;
+const zoomIndicator = document.getElementById('zoomIndicator');
 
 function setRemoteSessionGuard(enabled) {
   document.documentElement.classList.toggle('remote-session-guard', enabled);
@@ -924,12 +930,93 @@ function applyRemoteStageAspect() {
   }
 }
 
+function clampRemotePan() {
+  if (!remoteStage) return;
+  if (remoteZoom <= 1) {
+    remotePanX = 0;
+    remotePanY = 0;
+    return;
+  }
+  const rect = remoteStage.getBoundingClientRect();
+  const maxX = Math.max(0, rect.width * (remoteZoom - 1));
+  const maxY = Math.max(0, rect.height * (remoteZoom - 1));
+  remotePanX = Math.max(-maxX, Math.min(0, remotePanX));
+  remotePanY = Math.max(-maxY, Math.min(0, remotePanY));
+}
+
+function applyRemoteZoom(showIndicator = true) {
+  if (!remoteVideo) return;
+  clampRemotePan();
+  remoteVideo.style.transformOrigin = '0 0';
+  remoteVideo.style.transform = `translate(${remotePanX}px, ${remotePanY}px) scale(${remoteZoom})`;
+  if (zoomIndicator) {
+    zoomIndicator.textContent = `${Math.round(remoteZoom * 100)}%`;
+    zoomIndicator.hidden = !showIndicator || remoteZoom === 1;
+    clearTimeout(applyRemoteZoom._timer);
+    if (!zoomIndicator.hidden) applyRemoteZoom._timer = setTimeout(() => { zoomIndicator.hidden = true; }, 1400);
+  }
+}
+
+function resetRemoteZoom() {
+  remoteZoom = 1;
+  remotePanX = 0;
+  remotePanY = 0;
+  pinchGesture = null;
+  applyRemoteZoom(false);
+}
+
+function touchDistance(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
+function touchMidpoint(a, b) {
+  return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+}
+
+function beginPinchZoom(event) {
+  if (!remoteStage || event.touches.length !== 2) return false;
+  const rect = remoteStage.getBoundingClientRect();
+  const mid = touchMidpoint(event.touches[0], event.touches[1]);
+  pinchGesture = {
+    distance: Math.max(1, touchDistance(event.touches[0], event.touches[1])),
+    startZoom: remoteZoom,
+    startPanX: remotePanX,
+    startPanY: remotePanY,
+    startMidX: mid.x - rect.left,
+    startMidY: mid.y - rect.top,
+  };
+  resetPointerGesture();
+  return true;
+}
+
+function updatePinchZoom(event) {
+  if (!pinchGesture || !remoteStage || event.touches.length !== 2) return false;
+  const rect = remoteStage.getBoundingClientRect();
+  const distance = Math.max(1, touchDistance(event.touches[0], event.touches[1]));
+  const newZoom = Math.max(1, Math.min(3, pinchGesture.startZoom * (distance / pinchGesture.distance)));
+  const mid = touchMidpoint(event.touches[0], event.touches[1]);
+  const currentMidX = mid.x - rect.left;
+  const currentMidY = mid.y - rect.top;
+  const baseX = (pinchGesture.startMidX - pinchGesture.startPanX) / pinchGesture.startZoom;
+  const baseY = (pinchGesture.startMidY - pinchGesture.startPanY) / pinchGesture.startZoom;
+  remoteZoom = newZoom;
+  remotePanX = currentMidX - (baseX * newZoom);
+  remotePanY = currentMidY - (baseY * newZoom);
+  applyRemoteZoom(true);
+  return true;
+}
+
 function getRemotePoint(clientX, clientY, { clampToScreen = false } = {}) {
   if (!remoteVideo || !remoteVideo.videoWidth || !remoteVideo.videoHeight) return null;
-  const rect = remoteVideo.getBoundingClientRect();
-  if (!rect.width || !rect.height) return null;
+  const rect = remoteStage?.getBoundingClientRect();
+  if (!rect || !rect.width || !rect.height) return null;
 
-  // Primeiro remove as barras criadas pelo object-fit do elemento <video>.
+  // Converte primeiro a coordenada visual (que pode estar com pinch-to-zoom/pan)
+  // para a caixa base do vídeo. Assim Mouse e Touch permanecem alinhados no zoom.
+  const localX = (clientX - rect.left - remotePanX) / remoteZoom;
+  const localY = (clientY - rect.top - remotePanY) / remoteZoom;
+
+  // Remove as barras criadas pelo object-fit do elemento <video>.
   const videoAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
   const boxAspect = rect.width / rect.height;
   let contentWidth = rect.width;
@@ -945,8 +1032,8 @@ function getRemotePoint(clientX, clientY, { clampToScreen = false } = {}) {
     offsetY = (rect.height - contentHeight) / 2;
   }
 
-  let encodedX = (clientX - rect.left - offsetX) / contentWidth;
-  let encodedY = (clientY - rect.top - offsetY) / contentHeight;
+  let encodedX = (localX - offsetX) / contentWidth;
+  let encodedY = (localY - offsetY) / contentHeight;
   if (clampToScreen) {
     encodedX = Math.max(0, Math.min(1, encodedX));
     encodedY = Math.max(0, Math.min(1, encodedY));
@@ -995,6 +1082,7 @@ function resetPointerGesture() {
 }
 
 function resetRemoteViewer(message = 'Conexão autorizada. Negociando a transmissão da tela via WebRTC...') {
+  resetRemoteZoom();
   remoteStage?.classList.remove('media-active');
   if (remoteVideo) {
     try { remoteVideo.pause(); } catch { }
@@ -1109,14 +1197,23 @@ async function startViewerWebRtc(code) {
   resetRemoteViewer('Negociando conexão WebRTC com o computador...');
   resetDiagnostics();
 
-  const pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: 'stun:stun.cloudflare.com:3478' },
-    ],
-  });
+  let iceServers = [{ urls: ['stun:stun.cloudflare.com:3478'] }];
+  let relayConfigured = false;
+  try {
+    const response = await fetch(`${API_BASE}/api/ice-config`, { cache: 'no-store' });
+    const config = await response.json();
+    if (response.ok && Array.isArray(config?.iceServers) && config.iceServers.length) {
+      iceServers = config.iceServers;
+      relayConfigured = Boolean(config.relayConfigured);
+    }
+  } catch {
+    diagEvent('ICE config: usando STUN padrão.');
+  }
+
+  const pc = new RTCPeerConnection({ iceServers });
   viewerPeer = pc;
   refreshPeerDiagnostics(pc);
-  diagEvent('PeerConnection criado com STUN Cloudflare.');
+  diagEvent(relayConfigured ? 'PeerConnection criado com STUN + TURN/relay.' : 'PeerConnection criado com STUN; TURN não configurado no servidor.');
 
   const controlChannel = pc.createDataChannel('remote-link-control-v1', { ordered: true });
   viewerControlChannel = controlChannel;
@@ -1824,7 +1921,12 @@ remoteStage?.addEventListener('wheel', (event) => {
 
 remoteStage?.addEventListener('touchstart', (event) => {
   if (!touchControlEnabled || !remoteStage.classList.contains('media-active')) return;
-  if (event.touches.length !== 1) return;
+  if (event.touches.length === 2) {
+    multiTouchScroll = beginPinchZoom(event);
+    event.preventDefault();
+    return;
+  }
+  if (event.touches.length !== 1 || multiTouchScroll) return;
   const touch = event.touches[0];
   const point = getRemotePoint(touch.clientX, touch.clientY, { clampToScreen: true });
   if (!point) return;
@@ -1835,8 +1937,13 @@ remoteStage?.addEventListener('touchstart', (event) => {
 }, { passive: false });
 
 remoteStage?.addEventListener('touchmove', (event) => {
-  if (!touchControlEnabled || !pointerGesture || pointerGesture.pointerType !== 'native-touch') return;
-  if (event.touches.length !== 1) return;
+  if (!touchControlEnabled) return;
+  if (multiTouchScroll && event.touches.length === 2) {
+    event.preventDefault();
+    updatePinchZoom(event);
+    return;
+  }
+  if (!pointerGesture || pointerGesture.pointerType !== 'native-touch' || event.touches.length !== 1) return;
   const touch = event.touches[0];
   const point = getRemotePoint(touch.clientX, touch.clientY, { clampToScreen: true });
   if (!point) return;
@@ -1853,7 +1960,13 @@ remoteStage?.addEventListener('touchmove', (event) => {
 }, { passive: false });
 
 remoteStage?.addEventListener('touchend', (event) => {
-  if (!touchControlEnabled || !pointerGesture || pointerGesture.pointerType !== 'native-touch') return;
+  if (!touchControlEnabled) return;
+  if (multiTouchScroll) {
+    if (event.touches.length < 2) { multiTouchScroll = false; pinchGesture = null; resetPointerGesture(); }
+    event.preventDefault();
+    return;
+  }
+  if (!pointerGesture || pointerGesture.pointerType !== 'native-touch') return;
   const gesture = pointerGesture;
   const changed = event.changedTouches?.[0];
   const x = changed?.clientX ?? gesture.lastX;
@@ -1879,9 +1992,7 @@ remoteStage?.addEventListener('touchstart', (event) => {
   if (!mouseControlEnabled || !remoteStage.classList.contains('media-active')) return;
 
   if (event.touches.length === 2) {
-    multiTouchScroll = true;
-    resetPointerGesture();
-    lastTwoFingerY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+    multiTouchScroll = beginPinchZoom(event);
     event.preventDefault();
     return;
   }
@@ -1910,14 +2021,7 @@ remoteStage?.addEventListener('touchmove', (event) => {
 
   if (multiTouchScroll && event.touches.length === 2) {
     event.preventDefault();
-    const currentY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-    if (lastTwoFingerY !== null) {
-      const movement = lastTwoFingerY - currentY;
-      if (Math.abs(movement) >= 3) {
-        sendControlMessage({ type: 'mouse', action: 'scroll', delta: Math.round(movement * 5) });
-        lastTwoFingerY = currentY;
-      }
-    }
+    updatePinchZoom(event);
     return;
   }
 
@@ -1938,7 +2042,7 @@ remoteStage?.addEventListener('touchend', (event) => {
   if (multiTouchScroll) {
     if (event.touches.length < 2) {
       multiTouchScroll = false;
-      lastTwoFingerY = null;
+      pinchGesture = null;
       resetPointerGesture();
     }
     return;
@@ -1962,9 +2066,22 @@ remoteStage?.addEventListener('touchend', (event) => {
 
 remoteStage?.addEventListener('touchcancel', () => {
   multiTouchScroll = false;
-  lastTwoFingerY = null;
+  pinchGesture = null;
   resetPointerGesture();
 }, { passive: true });
+
+remoteStage?.addEventListener('dblclick', (event) => {
+  if (!remoteStage.classList.contains('media-active')) return;
+  event.preventDefault();
+  if (remoteZoom > 1.05) resetRemoteZoom();
+  else {
+    const rect = remoteStage.getBoundingClientRect();
+    remoteZoom = 2;
+    remotePanX = -(event.clientX - rect.left);
+    remotePanY = -(event.clientY - rect.top);
+    applyRemoteZoom(true);
+  }
+});
 
 screensControlBtn?.addEventListener('click', openScreensModal);
 screensModalClose?.addEventListener('click', closeScreensModal);

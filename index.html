@@ -35,7 +35,7 @@
         <div class="section-title">
           <div>
             <h2>Meus computadores</h2>
-            <p>Dispositivos confiáveis pareados com esta PWA.</p>
+            
           </div>
         </div>
 
@@ -43,12 +43,12 @@
           <div class="empty-state">
             <div class="empty-icon">⌁</div>
             <strong>Nenhum computador pareado</strong>
-            <p>Use o QR Code para adicionar seu primeiro dispositivo.</p>
+            
           </div>
         </div>
 
         <button id="pairBtn" class="secondary-btn full" type="button">
-          <span>▣</span> Como conectar por QR Code
+          <span>▣</span> Adicionar por QR Code
         </button>
       </section>
 
@@ -56,7 +56,7 @@
         <div class="section-title">
           <div>
             <h2>Suporte remoto supervisionado</h2>
-            <p>Conecte usando apenas o código temporário. A pessoa no PC deverá clicar em PERMITIR.</p>
+            
           </div>
         </div>
 
@@ -68,7 +68,7 @@
       <section class="panel">
         <div class="section-title"><div>
           <h2>Acesso permanente</h2>
-          <p>Para computadores configurados para acesso sem supervisão, use ID fixo e senha.</p>
+          
         </div></div>
         <button id="permanentBtn" class="secondary-btn full" type="button">Conectar por ID permanente</button>
       </section>
@@ -156,6 +156,7 @@
 
       <div id="remoteStage" class="remote-stage">
         <video id="remoteVideo" class="remote-video" autoplay playsinline muted></video>
+        <div id="zoomIndicator" class="zoom-indicator" hidden>100%</div>
         <div id="remotePlaceholder" class="remote-placeholder">
           <div class="monitor-icon">▣</div>
           <strong>Área de trabalho remota</strong>
@@ -188,7 +189,7 @@
 
     <footer class="footer footer-centered">
       <button id="aboutLink" class="footer-about-link" type="button" aria-haspopup="dialog" aria-controls="aboutModal">
-        © Remote Link - v0.9.0
+        © Remote Link - v1.1.0
       </button>
     </footer>
   </main>
@@ -199,7 +200,7 @@
       <h2 id="aboutModalTitle">Remote Link</h2>
       <p><strong>Desenvolvido por:</strong> Mizael Nunes.</p>
       <p><strong>Email:</strong> <a href="mailto:mizaelnunes001@hotmail.com">mizaelnunes001@hotmail.com</a></p>
-      <small>Remote Link • v0.9.0</small>
+      <small>Remote Link • v1.1.0</small>
     </section>
   </div>
 
@@ -233,6 +234,21 @@
         <button type="button" data-shortcut="Control+v">Ctrl+V</button>
         <button type="button" data-shortcut="Control+x">Ctrl+X</button>
       </div>
+      <details class="keyboard-extra" open>
+        <summary>Teclas de função</summary>
+        <div class="keyboard-function-keys">
+          <button type="button" data-key="F1">F1</button><button type="button" data-key="F2">F2</button><button type="button" data-key="F3">F3</button><button type="button" data-key="F4">F4</button>
+          <button type="button" data-key="F5">F5</button><button type="button" data-key="F6">F6</button><button type="button" data-key="F7">F7</button><button type="button" data-key="F8">F8</button>
+          <button type="button" data-key="F9">F9</button><button type="button" data-key="F10">F10</button><button type="button" data-key="F11">F11</button><button type="button" data-key="F12">F12</button>
+        </div>
+      </details>
+      <details class="keyboard-extra">
+        <summary>Teclas especiais</summary>
+        <div class="keyboard-function-keys">
+          <button type="button" data-key="Home">Home</button><button type="button" data-key="End">End</button><button type="button" data-key="PageUp">PgUp</button><button type="button" data-key="PageDown">PgDn</button>
+          <button type="button" data-key="Insert">Ins</button><button type="button" data-key="Delete">Del</button><button type="button" data-key="PrintScreen">PrtSc</button><button type="button" data-shortcut="Alt+Tab">Alt+Tab</button>
+        </div>
+      </details>
       <small>Ctrl+C/V atuam no clipboard do próprio computador remoto. Para transferir texto entre os dispositivos, use o botão 📋.</small>
     </section>
   </div>

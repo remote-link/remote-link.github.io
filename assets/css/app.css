@@ -87,3 +87,20 @@ body.remote-session-guard{
   .about-modal{max-height:calc(100dvh - 24px);padding-bottom:calc(24px + env(safe-area-inset-bottom))}
   .file-modal{width:100%}
 }
+
+
+/* v1.1.0 — interface mais clean, zoom/pan e teclado expandido */
+#homeView .section-title:has(h2){margin-bottom:12px}
+#homeView .section-title p{display:none}
+#homeView .empty-state p{display:none}
+#homeView .empty-state{padding-top:20px;padding-bottom:20px}
+.remote-video{transition:none;will-change:transform}
+.zoom-indicator{position:absolute;right:12px;top:12px;z-index:5;padding:6px 10px;border-radius:999px;background:rgba(4,17,31,.78);border:1px solid rgba(255,255,255,.18);color:#e8eef8;font-size:.78rem;font-weight:800;pointer-events:none;backdrop-filter:blur(8px)}
+.zoom-indicator[hidden]{display:none}
+.remote-stage.media-active{touch-action:none;overscroll-behavior:none}
+.keyboard-extra{margin-top:12px;border:1px solid rgba(145,160,183,.16);border-radius:13px;background:rgba(8,19,33,.5);padding:9px 10px}
+.keyboard-extra summary{cursor:pointer;font-weight:750;color:#dce7f6;user-select:none}
+.keyboard-function-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}
+.keyboard-function-keys button{min-height:40px;border:1px solid rgba(145,160,183,.2);border-radius:10px;background:#101f34;color:#dce7f6;font-weight:700}
+.keyboard-function-keys button:active{background:#173d69}
+@media(max-width:420px){.keyboard-function-keys{grid-template-columns:repeat(3,1fr)}}
